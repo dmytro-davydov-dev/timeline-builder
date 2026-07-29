@@ -211,7 +211,7 @@ export function CaseViewPage() {
         onClose={() => setChatOpen(false)}
         fullWidth
         maxWidth="sm"
-        PaperProps={{ sx: { height: '70vh' } }}
+        slotProps={{ paper: { sx: { height: '70vh' } } }}
       >
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           Ask about this case
