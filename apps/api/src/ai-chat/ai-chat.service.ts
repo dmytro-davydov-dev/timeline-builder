@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ChatHistoryTurn } from './dto/chat-message.dto';
-import { GROUNDING_SYSTEM_PROMPT, TOOL_DEFINITIONS } from './tools/tool-definitions';
+import {
+  GEMINI_TOOL_DEFINITIONS,
+  GROUNDING_SYSTEM_PROMPT,
+  TOOL_DEFINITIONS,
+} from './tools/tool-definitions';
 import { ToolExecutor } from './tools/tool-executor';
 
 const MAX_ITERATIONS = 4; // per Medical-Timeline-Phase1-Implementation-Plan.md §5
@@ -35,16 +39,32 @@ export class AiChatService {
     message: string,
     history: ChatHistoryTurn[] = [],
   ): Promise<ChatResponse> {
-    const apiKey = this.config.get<string>('OPENAI_API_KEY');
-    if (!apiKey) {
-      return {
-        reply:
-          'AI chat is not configured yet — set OPENAI_API_KEY (or GEMINI_API_KEY, once that provider is wired up) in the API environment to enable grounded Q&A.',
-        referencedEventIds: [],
-        toolCalls: [],
-      };
+    // Gemini takes priority when both keys happen to be set — the resolved
+    // Open Question in docs/PRD-AI-Chat.md §11 (Architecture.md §16).
+    const geminiKey = this.config.get<string>('GEMINI_API_KEY');
+    if (geminiKey) {
+      return this.chatWithGemini(geminiKey, caseId, message, history);
     }
 
+    const openAiKey = this.config.get<string>('OPENAI_API_KEY');
+    if (openAiKey) {
+      return this.chatWithOpenAi(openAiKey, caseId, message, history);
+    }
+
+    return {
+      reply:
+        'AI chat is not configured yet — set GEMINI_API_KEY or OPENAI_API_KEY in the API environment to enable grounded Q&A.',
+      referencedEventIds: [],
+      toolCalls: [],
+    };
+  }
+
+  private async chatWithOpenAi(
+    apiKey: string,
+    caseId: string,
+    message: string,
+    history: ChatHistoryTurn[],
+  ): Promise<ChatResponse> {
     const messages: Array<Record<string, unknown>> = [
       { role: 'system', content: GROUNDING_SYSTEM_PROMPT },
       ...history.map((turn) => ({ role: turn.role, content: turn.content })),
@@ -126,6 +146,103 @@ export class AiChatService {
           tool_calls?: Array<{
             id: string;
             function?: { name?: string; arguments?: string };
+          }>;
+        };
+      }>;
+    }>;
+  }
+
+  private async chatWithGemini(
+    apiKey: string,
+    caseId: string,
+    message: string,
+    history: ChatHistoryTurn[],
+  ): Promise<ChatResponse> {
+    // Gemini's `contents` array has no separate system-message role — the
+    // grounding prompt goes in the request's top-level `systemInstruction`
+    // instead (set in callGemini), and history maps assistant → 'model'.
+    const contents: Array<Record<string, unknown>> = [
+      ...history.map((turn) => ({
+        role: turn.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: turn.content }],
+      })),
+      { role: 'user', parts: [{ text: message }] },
+    ];
+
+    const toolCallLog: { name: string; args: Record<string, unknown> }[] = [];
+    const referencedEventIds = new Set<string>();
+
+    for (let i = 0; i < MAX_ITERATIONS; i++) {
+      const completion = await this.callGemini(apiKey, contents);
+      const parts = completion.candidates?.[0]?.content?.parts ?? [];
+      const functionCallParts = parts.filter((p) => p.functionCall);
+
+      if (functionCallParts.length === 0) {
+        return {
+          reply: parts.map((p) => p.text ?? '').join(''),
+          referencedEventIds: [...referencedEventIds],
+          toolCalls: toolCallLog,
+        };
+      }
+
+      contents.push({ role: 'model', parts });
+
+      const responseParts: Array<Record<string, unknown>> = [];
+      for (const part of functionCallParts) {
+        const name = part.functionCall?.name ?? '';
+        const args = part.functionCall?.args ?? {};
+
+        toolCallLog.push({ name, args });
+        const result = await this.toolExecutor.execute(caseId, name, args);
+        this.collectEventIds(result, referencedEventIds);
+
+        responseParts.push({
+          functionResponse: { name, response: { result } },
+        });
+      }
+      // This API version rejects role 'function' ("Role 'function' is not
+      // supported... use SYSTEM, USER, MODEL, ...", confirmed via a live
+      // 400) despite older Gemini docs describing that role — function
+      // responses go back under 'user' instead.
+      contents.push({ role: 'user', parts: responseParts });
+    }
+
+    return {
+      reply:
+        "I wasn't able to reach a grounded answer within the tool-call budget for this question — try narrowing it.",
+      referencedEventIds: [...referencedEventIds],
+      toolCalls: toolCallLog,
+    };
+  }
+
+  private async callGemini(apiKey: string, contents: Array<Record<string, unknown>>) {
+    // 'gemini-flash-lite-latest' rather than a pinned version: this key's
+    // project has $0/zero free-tier quota on gemini-2.0-flash/2.5-flash
+    // (confirmed via a live 429 RESOURCE_EXHAUSTED with "limit: 0"), and the
+    // "-latest" alias is what actually has quota available on this account.
+    const model = this.config.get<string>('GEMINI_MODEL', 'gemini-flash-lite-latest');
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: GROUNDING_SYSTEM_PROMPT }] },
+          contents,
+          tools: [{ functionDeclarations: GEMINI_TOOL_DEFINITIONS }],
+        }),
+      },
+    );
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Gemini request failed (${response.status}): ${text}`);
+    }
+    return response.json() as Promise<{
+      candidates?: Array<{
+        content?: {
+          parts?: Array<{
+            text?: string;
+            functionCall?: { name: string; args?: Record<string, unknown> };
           }>;
         };
       }>;

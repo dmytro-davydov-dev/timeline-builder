@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { MedicalEventsService } from '../../medical-events/medical-events.service';
+import { QueryEventsDto } from '../../medical-events/dto/query-events.dto';
 
 interface EventFilterArgs {
   dateFrom?: string;
@@ -49,7 +50,12 @@ export class ToolExecutor {
     }
   }
 
-  private toFilters(args: Record<string, unknown>): EventFilterArgs {
+  // NB: the tool's `keyword` argument maps to QueryEventsDto's `q` field —
+  // MedicalEventsService.findByFilters only reads `q` for the summary-text
+  // match, so a straight passthrough of `keyword` here silently no-ops the
+  // filter and returns every event unfiltered (caught live: a "lumbar spine"
+  // keyword search was coming back with all 130 case events referenced).
+  private toFilters(args: Record<string, unknown>): QueryEventsDto {
     const filters = args as EventFilterArgs;
     return {
       dateFrom: filters.dateFrom,
@@ -58,7 +64,7 @@ export class ToolExecutor {
       bodyPart: filters.bodyPart,
       medicineType: filters.medicineType,
       recordType: filters.recordType,
-      keyword: filters.keyword,
+      q: filters.keyword,
     };
   }
 }

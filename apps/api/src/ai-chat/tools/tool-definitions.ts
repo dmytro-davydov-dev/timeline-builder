@@ -19,10 +19,18 @@ export const TOOL_DEFINITIONS = [
         properties: {
           dateFrom: { type: 'string', description: 'ISO date, inclusive' },
           dateTo: { type: 'string', description: 'ISO date, inclusive' },
-          provider: { type: 'string' },
-          bodyPart: { type: 'string' },
-          medicineType: { type: 'string' },
-          recordType: { type: 'string' },
+          provider: { type: 'string', description: 'Clinician/practitioner name, e.g. "Grant T. Olsen, NP"' },
+          bodyPart: { type: 'string', description: 'Anatomical region, e.g. "Shoulder", "Lumbar Spine"' },
+          medicineType: {
+            type: 'string',
+            description:
+              'Specialty/care category, e.g. "Physical Therapy", "Orthopedic", "Radiology", "Emergency Medicine". Use this — not recordType — for questions like "how many PT sessions" or "how many orthopedic visits".',
+          },
+          recordType: {
+            type: 'string',
+            description:
+              'Document/note type, e.g. "Encounter Note", "Imaging Report", "Physical Therapy Note", "Discharge Summary". This is the kind of document, not the specialty — use medicineType for specialty questions.',
+          },
           keyword: { type: 'string', description: 'Matched against the summary text' },
         },
       },
@@ -37,13 +45,21 @@ export const TOOL_DEFINITIONS = [
       parameters: {
         type: 'object',
         properties: {
-          dateFrom: { type: 'string' },
-          dateTo: { type: 'string' },
-          provider: { type: 'string' },
-          bodyPart: { type: 'string' },
-          medicineType: { type: 'string' },
-          recordType: { type: 'string' },
-          keyword: { type: 'string' },
+          dateFrom: { type: 'string', description: 'ISO date, inclusive' },
+          dateTo: { type: 'string', description: 'ISO date, inclusive' },
+          provider: { type: 'string', description: 'Clinician/practitioner name' },
+          bodyPart: { type: 'string', description: 'Anatomical region, e.g. "Shoulder", "Lumbar Spine"' },
+          medicineType: {
+            type: 'string',
+            description:
+              'Specialty/care category, e.g. "Physical Therapy", "Orthopedic", "Radiology". Use this — not recordType — for questions like "how many PT sessions".',
+          },
+          recordType: {
+            type: 'string',
+            description:
+              'Document/note type, e.g. "Encounter Note", "Imaging Report". Not the specialty — use medicineType for specialty questions.',
+          },
+          keyword: { type: 'string', description: 'Matched against the summary text' },
         },
       },
     },
@@ -97,6 +113,36 @@ export const TOOL_DEFINITIONS = [
     },
   },
 ] as const;
+
+/** Recursively upper-cases JSON-schema `type` values (STRING/OBJECT/NUMBER/…)
+ * to match the Gemini function-calling REST API's `Schema.type` enum, which
+ * is case-sensitive — everything else in the schema passes through as-is. */
+function toGeminiSchema(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(toGeminiSchema);
+  if (schema === null || typeof schema !== 'object') return schema;
+
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(schema as Record<string, unknown>)) {
+    if (key === 'type' && typeof value === 'string') {
+      out[key] = value.toUpperCase();
+    } else if (key === 'properties' && value && typeof value === 'object') {
+      out[key] = Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, toGeminiSchema(v)]),
+      );
+    } else {
+      out[key] = toGeminiSchema(value);
+    }
+  }
+  return out;
+}
+
+/** Same tools as TOOL_DEFINITIONS, reshaped for Gemini's generateContent
+ * `tools[].functionDeclarations` field instead of OpenAI's `tools[].function`. */
+export const GEMINI_TOOL_DEFINITIONS = TOOL_DEFINITIONS.map((t) => ({
+  name: t.function.name,
+  description: t.function.description,
+  parameters: toGeminiSchema(t.function.parameters),
+}));
 
 export const GROUNDING_SYSTEM_PROMPT = `You are a grounded assistant answering questions about a single personal-injury case's medical timeline.
 

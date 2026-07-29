@@ -22,6 +22,15 @@ function finalCompletion(content: string) {
   return { choices: [{ message: { content, tool_calls: [] } }] };
 }
 
+/** Builds a fake Gemini generateContent response body for one iteration. */
+function geminiToolCall(name: string, args: Record<string, unknown>) {
+  return { candidates: [{ content: { parts: [{ functionCall: { name, args } }] } }] };
+}
+
+function geminiFinal(text: string) {
+  return { candidates: [{ content: { parts: [{ text }] } }] };
+}
+
 function fakeConfig(values: Record<string, string>) {
   return {
     get: jest.fn((key: string, fallback?: string) => values[key] ?? fallback),
@@ -113,6 +122,69 @@ describe('AiChatService', () => {
     const result = await service.chat('case-1', 'An intentionally convoluted multi-part question');
 
     // MAX_ITERATIONS = 4 per PRD-AI-Chat.md §3/§8 — bounds worst-case latency.
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(toolExecutor.execute).toHaveBeenCalledTimes(4);
+    expect(result.reply).toMatch(/tool-call budget/i);
+  });
+
+  it('prefers Gemini over OpenAI when both keys are configured', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => geminiFinal('Gemini answered this one.'),
+    });
+    const service = new AiChatService(
+      fakeConfig({ GEMINI_API_KEY: 'gemini-key', OPENAI_API_KEY: 'openai-key' }),
+      toolExecutor as unknown as ToolExecutor,
+    );
+
+    const result = await service.chat('case-1', 'ping');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toContain('generativelanguage.googleapis.com');
+    expect(result.reply).toBe('Gemini answered this one.');
+  });
+
+  it('Gemini path executes a tool call, feeds the result back, and collects referenced event ids', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => geminiToolCall('find_events', { keyword: 'MRI' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => geminiFinal('The first MRI was on 2024-01-05 (evt-1).'),
+      });
+    toolExecutor.execute.mockResolvedValueOnce([
+      { id: 'evt-1', date: '2024-01-05', summary: 'MRI lumbar spine' },
+    ]);
+    const service = new AiChatService(
+      fakeConfig({ GEMINI_API_KEY: 'gemini-key' }),
+      toolExecutor as unknown as ToolExecutor,
+    );
+
+    const result = await service.chat('case-1', 'When was the first MRI?');
+
+    expect(toolExecutor.execute).toHaveBeenCalledWith('case-1', 'find_events', {
+      keyword: 'MRI',
+    });
+    expect(result.toolCalls).toEqual([{ name: 'find_events', args: { keyword: 'MRI' } }]);
+    expect(result.referencedEventIds).toEqual(['evt-1']);
+    expect(result.reply).toBe('The first MRI was on 2024-01-05 (evt-1).');
+  });
+
+  it('Gemini path never exceeds the iteration cap either', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => geminiToolCall('count_events', {}),
+    });
+    toolExecutor.execute.mockResolvedValue({ count: 3 });
+    const service = new AiChatService(
+      fakeConfig({ GEMINI_API_KEY: 'gemini-key' }),
+      toolExecutor as unknown as ToolExecutor,
+    );
+
+    const result = await service.chat('case-1', 'convoluted multi-part question');
+
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(toolExecutor.execute).toHaveBeenCalledTimes(4);
     expect(result.reply).toMatch(/tool-call budget/i);

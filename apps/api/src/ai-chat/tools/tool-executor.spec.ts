@@ -29,6 +29,9 @@ describe('ToolExecutor', () => {
       bodyPart: 'Lumbar Spine',
     });
 
+    // The tool's `keyword` arg must map to QueryEventsDto's `q` field — that's
+    // the only field MedicalEventsService.findByFilters actually reads for a
+    // summary-text match (see tool-executor.ts's toFilters comment).
     expect(events.findByFilters).toHaveBeenCalledWith('case-1', {
       dateFrom: undefined,
       dateTo: undefined,
@@ -36,7 +39,7 @@ describe('ToolExecutor', () => {
       bodyPart: 'Lumbar Spine',
       medicineType: undefined,
       recordType: undefined,
-      keyword: 'MRI',
+      q: 'MRI',
     });
     expect(result).toEqual([
       { id: 'evt-1', date: '2024-01-05', recordType: 'Imaging', summary: 'MRI lumbar spine' },
