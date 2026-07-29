@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Button, Stack, TextField, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { Box, Button, Stack, TextField, ToggleButton, ToggleButtonGroup, Tooltip } from '@mui/material';
 import type { Case } from '../../types';
 
 interface SharedToolbarProps {
@@ -72,6 +72,23 @@ export function SharedToolbar({
         <ToggleButton value="intensity">Intensity</ToggleButton>
         <ToggleButton value="medicineType">Medicine type</ToggleButton>
       </ToggleButtonGroup>
+
+      <Box sx={{ display: 'flex', gap: 1, ml: 'auto' }}>
+        <Tooltip title="Coming soon">
+          <span>
+            <Button size="small" variant="outlined" disabled>
+              Export PDF
+            </Button>
+          </span>
+        </Tooltip>
+        <Tooltip title="Coming soon">
+          <span>
+            <Button size="small" variant="outlined" disabled>
+              Export PPT
+            </Button>
+          </span>
+        </Tooltip>
+      </Box>
     </Stack>
   );
 }

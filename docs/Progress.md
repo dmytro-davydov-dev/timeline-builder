@@ -4,7 +4,7 @@
 
 **Purpose:** living tracker of what's actually built versus what the PRDs/`Architecture.md` describe, so gaps don't have to be re-discovered by reading code every session. Update this file whenever a module's implementation status changes materially — don't let it drift into a changelog (git history already covers that).
 
-**Last audited:** 2026-07-29, against commit `ae53a4c` (Excel import implemented), with an in-progress `CasesService` unit test suite (§3b) layered on top not yet committed.
+**Last audited:** 2026-07-29, against commit `1892384` (case management), with Timeline View popup/popover work (§4a, this session) layered on top not yet committed.
 
 ## 1. Overall Status
 
@@ -15,7 +15,7 @@ Matches the README's own self-assessment: **scaffolded, not MVP-complete.** Both
 | Excel Import | Working, normalization fallbacks now match PRD §4 (§3), parser has unit test coverage | Minimal upload form, no error detail UI | Mostly done |
 | Case & Milestones | Working, matches PRD, now has unit test coverage (§3b) | Accident-date input only; no other milestone UI (by design) | Done |
 | Medical Events (query layer) | Working: filters, statistics, grouped-by-body-part/day, gaps | Consumed via TanStack Query hooks | Done |
-| Timeline View (Body Map + Calendar) | N/A (frontend-only per architecture) | Simplified placeholders — no popups/popovers, no month grids, no export buttons | Significant gaps (§4) |
+| Timeline View (Body Map + Calendar) | N/A (frontend-only per architecture) | Popups/popovers implemented (§4a); still no month-grid/activity-strip layout, narrow-viewport unverified | Gaps narrowed (§4, §4a) |
 | AI Chat | Working tool-calling loop (OpenAI only), honest fallback with no key | Basic message list, no highlight animation (state only) | Mostly done, needs polish |
 | Tests | `excel-parser.spec.ts` (8) + `cases.service.spec.ts` (6) passing; rest is Nest's default boilerplate spec | None | Partial (§6) |
 
@@ -79,6 +79,24 @@ No production code changed — this closes a test-coverage gap, not a behavioral
 **Chat panel gaps vs. `PRD-AI-Chat.md` §6:**
 - Highlighting is state-only (a `Set<string>` of event ids) — nothing currently renders a *visual pulse/flash* distinct from the static "highlighted" outline style already used for manual selection, so a chat-driven highlight and a manual click currently look identical instead of being a transient effect as specified.
 
+## 4a. Frontend — Timeline View popups/popovers + related gaps closed (2026-07-29)
+
+Addressed the single biggest gap flagged in §4 (no way to see individual encounter detail) plus several smaller PRD-Timeline-View.md items, via `/goal` session:
+
+- **Body Map detail popup** (§6): new `BodyMapDetailPopup.tsx`, rendered as a child of the Body Map `Paper` (which is now `position: relative`) so it sizes to 90% × 90% of the *panel's own bounding box*, not the viewport — matches the explicit acceptance criterion. Header (body part + "N of M" count badge), medicine-type filter chips (multi-toggle, re-filters in place), scrollable encounter list, empty-filter state, ✕ + backdrop dismissal. Opening a new body part replaces content in place (React state, not a stack).
+- **Calendar day popover** (§7.4): new `CalendarDayPopover.tsx`, fixed-viewport-positioned near the click coordinates (clamped to stay on-screen), full-screen dim backdrop — deliberately different scoping from the Body Map popup, per spec.
+- **Shared `EncounterCard.tsx`**: same card shape (provider, facility, date, medicine-type tag, summary, Source PDF link) used by both popup and popover, per §7.4's visual-consistency requirement.
+- **`medicineTypeColors.ts`**: medicine type is free-form text from the source Excel (no fixed enum in the backend), so colors are assigned deterministically by hashing the string against a fixed palette rather than a maintained lookup — same generic-Excel principle as `bodyPartCoordinates.ts`.
+- **Body Map hotspots now colored by dominant medicine type** (§5.1) instead of a static primary/secondary color; count is rendered as the hotspot's label.
+- **Accident-date markers**: Calendar cells for the accident date get a dashed ring even when that date has zero encounters (§7.1) — `CaseViewPage` synthesizes a zero-count day entry since `grouped-by-day` only returns days with activity. Body Map popup cards flag (⚑) the encounter(s) matching the accident date.
+- **Export PDF / Export PPT**: added as disabled, clearly-labeled buttons with a "Coming soon" tooltip in `SharedToolbar` (§4) — previously absent entirely.
+- **Body-part coordinate config** (`bodyPartCoordinates.ts`) expanded from ~19 to the full Appendix A set (30 terms: added Face, Eye, Ear, Nose, Mouth, Sinuses, Upper Arm, Forearm, Finger, Lungs, Heart, Armpit, Stomach, Intestines, Genitals, Toe) plus a few extras already present (Cervical Spine, Lower Back, Hip, Knee, Ankle).
+- Selection/popup state (`selectedBodyPart`, `selectedDay`, highlight set) now resets on `caseId` change via a `useEffect`, matching §4/§8's "no full page reload, state resets on new Excel" requirement.
+- **Narrow-viewport breakpoint fixed**: the panel split used MUI's default `md` breakpoint (900px), which would stack panels between 860–900px — a violation of §3's "desktop ≥860px: two panels side by side" requirement. Replaced with an explicit `@media (min-width: 860px)` matching the PRD's exact threshold.
+- Verified against a hand-built sample case (via a temporary xlsx, imported through the real `POST /cases/import` endpoint, not a mock) that `grouped-by-body-part`, `grouped-by-day`, and `events` response shapes match what the new components consume — confirmed by reading API responses directly (`curl`), since no Chrome browser extension was available in this session to visually verify the popup/popover in-browser. **This is a gap**: sizing/positioning correctness (the 90%×90% acceptance criterion, popover clamping near viewport edges) has been verified by code/CSS reasoning only, not by rendering it.
+
+**Still gaps vs. PRD-Timeline-View.md** (unchanged from §4 below): Calendar is still a flat density grid, not the activity-strip + month-grid combination (§7.1–7.2); no legend redesign beyond the two simple legends added here; narrow-viewport (<860px) stacking behavior still unverified; empty/loading/error state copy still incomplete for the "no case loaded" paths.
+
 ## 5. Known Working End-to-End Paths (verified by reading code, not by running it)
 
 1. Upload a valid Excel → Case + MedicalEvents persisted → redirect to Case View → stats/body-map/calendar all populate from real API calls.
@@ -106,14 +124,16 @@ Don't re-flag these — they're documented MVP exclusions, not oversights:
 
 Roughly in the order that closes the biggest PRD-vs-code gaps first:
 
-1. Body Map popup + Calendar day popover (`PRD-Timeline-View.md` §6–7.4) — currently the largest functional gap; without it, users can't see individual encounter detail (provider, facility, summary, PDF link) at all.
+1. ~~Body Map popup + Calendar day popover (`PRD-Timeline-View.md` §6–7.4).~~ Done 2026-07-29 (§4a) — **not yet visually verified in-browser**, see §4a caveat.
 2. ~~Excel Import normalization fallbacks (§3 above) to match `PRD-Excel-Import.md` §4, plus the parser unit test suite it explicitly requires, plus the `importSummary`/`warnings` response shape.~~ Done 2026-07-29 (§3).
-3. Accident-date visual markers on both panels (currently stored but not rendered back).
-4. Export button placeholders (should be a small, low-risk addition).
-5. Expand the body-part coordinate config toward the full Appendix A list.
-6. Calendar month-grid + activity-strip layout, legends for both color modes.
-7. AI Chat spot-check log (five questions, expected answers, re-run before any demo).
-8. Remaining backend test gap: `MedicalEventsService` and `AiChatService`/`ToolExecutor` still have zero coverage (cases/milestones closed 2026-07-29, §3b).
+3. ~~Accident-date visual markers on both panels.~~ Done 2026-07-29 (§4a).
+4. ~~Export button placeholders.~~ Done 2026-07-29 (§4a).
+5. ~~Expand the body-part coordinate config toward the full Appendix A list.~~ Done 2026-07-29 (§4a).
+6. Visually verify the new popup/popover in a real browser (sizing, positioning, resize behavior) — flagged as unverified in §4a.
+7. Calendar month-grid + activity-strip layout (§7.1–7.2) — still the largest remaining structural gap; current Calendar is a flat density grid.
+8. ~~Narrow-viewport (<860px) stacking verification.~~ Done 2026-07-29 (§4a) — breakpoint corrected to an exact 860px match; still not visually verified in-browser (same caveat as item 6).
+9. AI Chat spot-check log (five questions, expected answers, re-run before any demo).
+10. Remaining backend test gap: `MedicalEventsService` and `AiChatService`/`ToolExecutor` still have zero coverage (cases/milestones closed 2026-07-29, §3b).
 
 ## 9. Open Questions Carried Over (unchanged from docs)
 

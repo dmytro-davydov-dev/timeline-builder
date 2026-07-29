@@ -1,12 +1,23 @@
 import { Box, Chip, Paper, Tooltip, Typography } from '@mui/material';
 import { lookupBodyPart, splitKnownAndUnknown } from '../../config/bodyPartCoordinates';
-import type { GroupedByBodyPart } from '../../types';
+import { colorForMedicineType } from '../../config/medicineTypeColors';
+import { BodyMapDetailPopup } from './BodyMapDetailPopup';
+import type { GroupedByBodyPart, MedicalEvent } from '../../types';
 
 interface BodyMapPanelProps {
   groups: GroupedByBodyPart[];
   bodyView: 'front' | 'back';
   highlightedBodyParts: Set<string>;
   onSelectBodyPart: (group: GroupedByBodyPart) => void;
+  selectedGroup: GroupedByBodyPart | null;
+  selectedEvents: MedicalEvent[];
+  accidentDate?: string | null;
+  onClosePopup: () => void;
+}
+
+function hotspotSize(count: number): number {
+  // radius = clamp(min, base + k * sqrt(count), max) per PRD §5.1
+  return Math.min(48, Math.max(20, 16 + 4 * Math.sqrt(count)));
 }
 
 /**
@@ -20,6 +31,10 @@ export function BodyMapPanel({
   bodyView,
   highlightedBodyParts,
   onSelectBodyPart,
+  selectedGroup,
+  selectedEvents,
+  accidentDate,
+  onClosePopup,
 }: BodyMapPanelProps) {
   const { known, unknown } = splitKnownAndUnknown(groups.map((g) => g.bodyPart));
   const byName = new Map(groups.map((g) => [g.bodyPart, g]));
@@ -30,7 +45,7 @@ export function BodyMapPanel({
   });
 
   return (
-    <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
+    <Paper variant="outlined" sx={{ p: 2, height: '100%', position: 'relative' }}>
       <Typography variant="subtitle1" gutterBottom>
         Body Map — {bodyView}
       </Typography>
@@ -45,10 +60,29 @@ export function BodyMapPanel({
           borderColor: 'grey.400',
         }}
       >
+        {groups.length === 0 && (
+          <Box
+            sx={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              px: 2,
+              textAlign: 'center',
+            }}
+          >
+            <Typography variant="body2" color="text.secondary">
+              No body-part data was found in this case.
+            </Typography>
+          </Box>
+        )}
+
         {visibleKnown.map((part) => {
           const coord = lookupBodyPart(part)!;
           const group = byName.get(part)!;
           const highlighted = highlightedBodyParts.has(part);
+          const size = hotspotSize(group.count);
           return (
             <Tooltip key={part} title={`${part} — ${group.count} encounter(s)`}>
               <Box
@@ -58,20 +92,38 @@ export function BodyMapPanel({
                   left: `${coord.x}%`,
                   top: `${coord.y}%`,
                   transform: 'translate(-50%, -50%)',
-                  width: Math.min(16 + group.count * 3, 44),
-                  height: Math.min(16 + group.count * 3, 44),
+                  width: size,
+                  height: size,
                   borderRadius: '50%',
-                  bgcolor: highlighted ? 'secondary.main' : 'primary.main',
-                  opacity: 0.85,
+                  bgcolor: colorForMedicineType(group.dominantMedicineType),
+                  outline: highlighted ? '3px solid' : 'none',
+                  outlineColor: 'secondary.main',
+                  opacity: 0.9,
                   cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   transition: 'transform 120ms ease',
                   '&:hover': { transform: 'translate(-50%, -50%) scale(1.1)' },
                 }}
-              />
+              >
+                <Typography variant="caption" sx={{ color: '#fff', fontWeight: 700, lineHeight: 1 }}>
+                  {group.count}
+                </Typography>
+              </Box>
             </Tooltip>
           );
         })}
       </Box>
+
+      {selectedGroup && (
+        <BodyMapDetailPopup
+          group={selectedGroup}
+          events={selectedEvents}
+          accidentDate={accidentDate}
+          onClose={onClosePopup}
+        />
+      )}
 
       {unknown.length > 0 && (
         <Box sx={{ mt: 2 }}>
