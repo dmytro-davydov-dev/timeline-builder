@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Alert, Box, CircularProgress, Container } from '@mui/material';
+import {
+  Alert,
+  Box,
+  CircularProgress,
+  Container,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+} from '@mui/material';
 import {
   useCase,
   useEvents,
@@ -38,13 +47,14 @@ export function CaseViewPage() {
   const [bodyView, setBodyView] = useState<'front' | 'back'>('front');
   const [calendarColorMode, setCalendarColorMode] = useState<
     'intensity' | 'medicineType'
-  >('intensity');
+  >('medicineType');
   const [highlightedEventIds, setHighlightedEventIds] = useState<Set<string>>(
     new Set(),
   );
   const [selectedBodyPart, setSelectedBodyPart] = useState<GroupedByBodyPart | null>(null);
   const [selectedDay, setSelectedDay] = useState<GroupedByDay | null>(null);
   const [dayPopoverAnchor, setDayPopoverAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
 
   // Loading a different Excel resets both panels' selection/popup state
   // (PRD-Timeline-View.md §4, §8) — keyed on caseId so it fires on navigation
@@ -54,6 +64,7 @@ export function CaseViewPage() {
     setSelectedDay(null);
     setDayPopoverAnchor(null);
     setHighlightedEventIds(new Set());
+    setChatOpen(false);
   }, [caseId]);
 
   if (caseQuery.isLoading) {
@@ -135,6 +146,7 @@ export function CaseViewPage() {
         onBodyViewChange={setBodyView}
         calendarColorMode={calendarColorMode}
         onCalendarColorModeChange={setCalendarColorMode}
+        onOpenChat={() => setChatOpen(true)}
       />
 
       <Box
@@ -142,14 +154,14 @@ export function CaseViewPage() {
           display: 'grid',
           gridTemplateColumns: '1fr',
           '@media (min-width: 860px)': {
-            gridTemplateColumns: '1fr 1fr',
+            gridTemplateColumns: '2fr 1fr',
           },
           gap: 2,
         }}
       >
-        {/* DOM order keeps Body Map above Calendar for narrow-viewport
-            stacking (PRD-Timeline-View.md §3); `order` flips them to
-            Calendar-left / Body-Map-right on the desktop split only. */}
+        {/* DOM order keeps Body Map, Calendar stacked in that order for
+            narrow-viewport display; `order` rearranges them to
+            Calendar / Body Map on the desktop split only. */}
         <Box sx={{ '@media (min-width: 860px)': { order: 2 } }}>
           <BodyMapPanel
             groups={groups}
@@ -194,12 +206,26 @@ export function CaseViewPage() {
         />
       )}
 
-        <Box sx={{ mt: 2 }}>
+      <Dialog
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        fullWidth
+        maxWidth="sm"
+        PaperProps={{ sx: { height: '70vh' } }}
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          Ask about this case
+          <IconButton size="small" onClick={() => setChatOpen(false)} aria-label="Close">
+            ✕
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column' }}>
           <ChatPanel
             caseId={caseQuery.data.id}
             onReferencedEventIds={(ids) => setHighlightedEventIds(new Set(ids))}
           />
-        </Box>
+        </DialogContent>
+      </Dialog>
       </Container>
     </>
   );

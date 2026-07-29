@@ -163,6 +163,7 @@ export function CalendarPanel({
 
   const first = parseDayKey(sortedKeys[0]);
   const last = parseDayKey(sortedKeys[sortedKeys.length - 1]);
+
   const { cells, monthLabels, totalCols } = buildActivityStrip(dayMap, first, last, accidentKey);
   const months = buildMonthGrids(dayMap, first, last, accidentKey);
 

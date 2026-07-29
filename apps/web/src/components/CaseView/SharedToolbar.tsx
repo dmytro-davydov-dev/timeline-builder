@@ -9,6 +9,7 @@ interface SharedToolbarProps {
   onBodyViewChange: (view: 'front' | 'back') => void;
   calendarColorMode: 'intensity' | 'medicineType';
   onCalendarColorModeChange: (mode: 'intensity' | 'medicineType') => void;
+  onOpenChat: () => void;
 }
 
 const segGroupSx = {
@@ -57,6 +58,7 @@ export function SharedToolbar({
   onBodyViewChange,
   calendarColorMode,
   onCalendarColorModeChange,
+  onOpenChat,
 }: SharedToolbarProps) {
   const [accidentDate, setAccidentDate] = useState(
     caseData.accidentDate?.slice(0, 10) ?? '',
@@ -66,7 +68,7 @@ export function SharedToolbar({
     <Stack
       direction="row"
       spacing={2.5}
-      sx={{ py: 2, alignItems: 'center', flexWrap: 'wrap' }}
+      sx={{ py: 2, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}
     >
       <Box>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
@@ -115,6 +117,15 @@ export function SharedToolbar({
           Color: Medicine type
         </ToggleButton>
       </ToggleButtonGroup>
+
+      <Button
+        size="small"
+        variant="outlined"
+        onClick={onOpenChat}
+        sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}
+      >
+        Ask about this case
+      </Button>
     </Stack>
   );
 }

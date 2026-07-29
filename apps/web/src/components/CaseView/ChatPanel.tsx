@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Button, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Box, Button, Stack, TextField, Typography } from '@mui/material';
 import { useChat } from '../../api/cases';
 import type { ChatTurn } from '../../types';
 
@@ -31,10 +31,8 @@ export function ChatPanel({ caseId, onReferencedEventIds }: ChatPanelProps) {
   };
 
   return (
-    <Paper variant="outlined" sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
-      <Typography variant="subtitle1">Ask about this case</Typography>
-
-      <Box sx={{ maxHeight: 220, overflowY: 'auto', flexGrow: 1 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, height: '100%' }}>
+      <Box sx={{ overflowY: 'auto', flexGrow: 1 }}>
         {history.length === 0 && (
           <Typography variant="body2" color="text.secondary">
             Try: "When was the first MRI?" or "Were there any treatment
@@ -74,6 +72,6 @@ export function ChatPanel({ caseId, onReferencedEventIds }: ChatPanelProps) {
           Send
         </Button>
       </Stack>
-    </Paper>
+    </Box>
   );
 }
