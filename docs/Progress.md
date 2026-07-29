@@ -4,7 +4,7 @@
 
 **Purpose:** living tracker of what's actually built versus what the PRDs/`Architecture.md` describe, so gaps don't have to be re-discovered by reading code every session. Update this file whenever a module's implementation status changes materially — don't let it drift into a changelog (git history already covers that).
 
-**Last audited:** 2026-07-29, against commit `4718e6a` (2 commits total: initial monorepo scaffold + README pass), with an in-progress Excel Import normalization fix (§3) layered on top not yet committed.
+**Last audited:** 2026-07-29, against commit `ae53a4c` (Excel import implemented), with an in-progress `CasesService` unit test suite (§3b) layered on top not yet committed.
 
 ## 1. Overall Status
 
@@ -13,11 +13,11 @@ Matches the README's own self-assessment: **scaffolded, not MVP-complete.** Both
 | Module | Backend | Frontend | Overall |
 |---|---|---|---|
 | Excel Import | Working, normalization fallbacks now match PRD §4 (§3), parser has unit test coverage | Minimal upload form, no error detail UI | Mostly done |
-| Case & Milestones | Working, matches PRD | Accident-date input only; no other milestone UI (by design) | Mostly done |
+| Case & Milestones | Working, matches PRD, now has unit test coverage (§3b) | Accident-date input only; no other milestone UI (by design) | Done |
 | Medical Events (query layer) | Working: filters, statistics, grouped-by-body-part/day, gaps | Consumed via TanStack Query hooks | Done |
 | Timeline View (Body Map + Calendar) | N/A (frontend-only per architecture) | Simplified placeholders — no popups/popovers, no month grids, no export buttons | Significant gaps (§4) |
 | AI Chat | Working tool-calling loop (OpenAI only), honest fallback with no key | Basic message list, no highlight animation (state only) | Mostly done, needs polish |
-| Tests | Only Nest's default boilerplate spec | None | Major gap (§6) |
+| Tests | `excel-parser.spec.ts` (8) + `cases.service.spec.ts` (6) passing; rest is Nest's default boilerplate spec | None | Partial (§6) |
 
 ## 2. Backend (`apps/api`) — Implemented
 
@@ -41,6 +41,19 @@ The parser previously skipped rows instead of applying the PRD's documented fall
 - Response shape now matches PRD §4.6 exactly: `{ caseId, importSummary: { rowsImported, rowsSkipped, warnings[] } }` (was a flat `{ caseId, rowsImported, rowsSkipped, issues }`). Updated in lockstep: `excel-import.service.ts` (`ImportSummary` interface + return + the zero-rows `BadRequestException` body), `apps/web/src/types/index.ts` `ImportSummary`, and `apps/api/src/scripts/seed.ts`'s log lines. `apps/web/src/pages/UploadPage.tsx` / `apps/web/src/api/cases.ts` only ever read `summary.caseId`, so no UI behavior changed. Both apps typecheck clean; backend test suite (9 tests) passes.
 
 No error-detail UI was added — the frontend still has no surface for `importSummary.warnings` (tracked separately as a known gap, not part of this PRD-compliance pass).
+
+## 3b. Backend — `CasesService` test coverage added (2026-07-29)
+
+`PRD-Case-Management.md`'s implementation was already correct (transaction-atomic case creation, `GET /cases/:id`, `PATCH /cases/:id/milestones`, `accidentDate` mirroring) but had zero test coverage. Added `cases.service.spec.ts` (6 tests, using an in-memory fake repository rather than a real DB/TypeORM connection):
+
+- Case creation.
+- `findOne` throws `NotFoundException` for a missing case.
+- Setting the `accidentDate` milestone mirrors it onto `Case.accidentDate` and appears in `case.milestones`.
+- Setting a non-`accidentDate` milestone (e.g. `"Surgery Date"`) leaves `Case.accidentDate` untouched.
+- Re-setting the same milestone label updates it in place rather than duplicating the row.
+- `setMilestone` on a missing case throws `NotFoundException`.
+
+No production code changed — this closes a test-coverage gap, not a behavioral one. Full backend suite: 15 tests / 3 suites passing; `tsc --noEmit` clean.
 
 ## 4. Frontend (`apps/web`) — Implemented vs. Gaps
 
@@ -75,7 +88,7 @@ No error-detail UI was added — the frontend still has no surface for `importSu
 
 ## 6. Testing — Major Gap
 
-- **Backend:** `excel-parser.spec.ts` now covers the full §8 list (clean file, missing column, bad dates, blank fields, multi-value cells, novel vocabulary, empty file, header order/case) — 8 tests passing. Still just the Nest CLI boilerplate (`app.controller.spec.ts`, `app.e2e-spec.ts`) beyond that: zero tests for `MedicalEventsService`, `AiChatService`/`ToolExecutor`, or the cases/milestones flow.
+- **Backend:** `excel-parser.spec.ts` covers the full §8 list (clean file, missing column, bad dates, blank fields, multi-value cells, novel vocabulary, empty file, header order/case) — 8 tests passing. `cases.service.spec.ts` (§3b) now covers milestone creation/update and the `accidentDate` mirroring convention — 6 tests passing. Still just the Nest CLI boilerplate (`app.controller.spec.ts`, `app.e2e-spec.ts`) beyond that: zero tests for `MedicalEventsService` or `AiChatService`/`ToolExecutor`.
 - **Frontend:** no test setup at all (no Vitest/Jest config, no component tests).
 - **No spot-check log** for the five required AI Chat questions (`PRD-Overview.md` §8, `PRD-AI-Chat.md` §8) — this is supposed to be a dated, written verification artifact re-run before every demo, and doesn't exist yet even as a template.
 
@@ -100,6 +113,7 @@ Roughly in the order that closes the biggest PRD-vs-code gaps first:
 5. Expand the body-part coordinate config toward the full Appendix A list.
 6. Calendar month-grid + activity-strip layout, legends for both color modes.
 7. AI Chat spot-check log (five questions, expected answers, re-run before any demo).
+8. Remaining backend test gap: `MedicalEventsService` and `AiChatService`/`ToolExecutor` still have zero coverage (cases/milestones closed 2026-07-29, §3b).
 
 ## 9. Open Questions Carried Over (unchanged from docs)
 
