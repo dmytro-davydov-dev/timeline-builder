@@ -134,31 +134,38 @@ export function CaseViewPage() {
           gap: 2,
         }}
       >
-        <BodyMapPanel
-          groups={groups}
-          bodyView={bodyView}
-          highlightedBodyParts={highlightedBodyParts}
-          onSelectBodyPart={(group) => {
-            setHighlightedEventIds(new Set(group.eventIds));
-            setSelectedBodyPart(group);
-          }}
-          selectedGroup={selectedBodyPart}
-          selectedEvents={selectedBodyPartEvents}
-          accidentDate={accidentDate}
-          onClosePopup={() => setSelectedBodyPart(null)}
-        />
-        <CalendarPanel
-          days={days}
-          colorMode={calendarColorMode}
-          highlightedDays={highlightedDays}
-          accidentDate={accidentDate}
-          onSelectDay={(group, anchor) => {
-            if (group.count === 0) return;
-            setHighlightedEventIds(new Set(group.eventIds));
-            setSelectedDay(group);
-            setDayPopoverAnchor(anchor);
-          }}
-        />
+        {/* DOM order keeps Body Map above Calendar for narrow-viewport
+            stacking (PRD-Timeline-View.md §3); `order` flips them to
+            Calendar-left / Body-Map-right on the desktop split only. */}
+        <Box sx={{ '@media (min-width: 860px)': { order: 2 } }}>
+          <BodyMapPanel
+            groups={groups}
+            bodyView={bodyView}
+            highlightedBodyParts={highlightedBodyParts}
+            onSelectBodyPart={(group) => {
+              setHighlightedEventIds(new Set(group.eventIds));
+              setSelectedBodyPart(group);
+            }}
+            selectedGroup={selectedBodyPart}
+            selectedEvents={selectedBodyPartEvents}
+            accidentDate={accidentDate}
+            onClosePopup={() => setSelectedBodyPart(null)}
+          />
+        </Box>
+        <Box sx={{ '@media (min-width: 860px)': { order: 1 } }}>
+          <CalendarPanel
+            days={days}
+            colorMode={calendarColorMode}
+            highlightedDays={highlightedDays}
+            accidentDate={accidentDate}
+            onSelectDay={(group, anchor) => {
+              if (group.count === 0) return;
+              setHighlightedEventIds(new Set(group.eventIds));
+              setSelectedDay(group);
+              setDayPopoverAnchor(anchor);
+            }}
+          />
+        </Box>
       </Box>
 
       {selectedDay && dayPopoverAnchor && (

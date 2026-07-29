@@ -4,18 +4,18 @@
 
 **Purpose:** living tracker of what's actually built versus what the PRDs/`Architecture.md` describe, so gaps don't have to be re-discovered by reading code every session. Update this file whenever a module's implementation status changes materially — don't let it drift into a changelog (git history already covers that).
 
-**Last audited:** 2026-07-29, against commit `1892384` (case management), with Timeline View popup/popover work (§4a, this session) layered on top not yet committed.
+**Last audited:** 2026-07-29, against commit `1892384` (case management), with Timeline View popup/popover work (§4a), the Calendar activity-strip/month-grid rewrite (§4b), and the Body Map silhouette + panel-order swap (§4c) layered on top, not yet committed.
 
 ## 1. Overall Status
 
-Matches the README's own self-assessment: **scaffolded, not MVP-complete.** Both apps build and run; the core data path (import → store → render → query → chat) works end-to-end for the happy path. Most of what's missing is Timeline View interaction depth (popups/popovers, month grids, export placeholders) and test coverage, not architecture — the module boundaries in `Architecture.md` are followed faithfully.
+Matches the README's own self-assessment: **scaffolded, not MVP-complete.** Both apps build and run; the core data path (import → store → render → query → chat) works end-to-end for the happy path. Timeline View interaction depth (popups/popovers, month grids, export placeholders) has now largely closed (§4a, §4b); what's left is mostly test coverage and minor empty-state polish, not architecture — the module boundaries in `Architecture.md` are followed faithfully.
 
 | Module | Backend | Frontend | Overall |
 |---|---|---|---|
 | Excel Import | Working, normalization fallbacks now match PRD §4 (§3), parser has unit test coverage | Minimal upload form, no error detail UI | Mostly done |
 | Case & Milestones | Working, matches PRD, now has unit test coverage (§3b) | Accident-date input only; no other milestone UI (by design) | Done |
 | Medical Events (query layer) | Working: filters, statistics, grouped-by-body-part/day, gaps | Consumed via TanStack Query hooks | Done |
-| Timeline View (Body Map + Calendar) | N/A (frontend-only per architecture) | Popups/popovers implemented (§4a); still no month-grid/activity-strip layout, narrow-viewport unverified | Gaps narrowed (§4, §4a) |
+| Timeline View (Body Map + Calendar) | N/A (frontend-only per architecture) | Popups/popovers (§4a); Calendar activity-strip + month-grid (§4b); Body Map now a real SVG silhouette, Calendar-left/Body-Map-right split (§4c) | Close to spec (§4, §4a, §4b, §4c) |
 | AI Chat | Working tool-calling loop (OpenAI only), honest fallback with no key | Basic message list, no highlight animation (state only) | Mostly done, needs polish |
 | Tests | `excel-parser.spec.ts` (8) + `cases.service.spec.ts` (6) passing; rest is Nest's default boilerplate spec | None | Partial (§6) |
 
@@ -95,7 +95,31 @@ Addressed the single biggest gap flagged in §4 (no way to see individual encoun
 - **Narrow-viewport breakpoint fixed**: the panel split used MUI's default `md` breakpoint (900px), which would stack panels between 860–900px — a violation of §3's "desktop ≥860px: two panels side by side" requirement. Replaced with an explicit `@media (min-width: 860px)` matching the PRD's exact threshold.
 - Verified against a hand-built sample case (via a temporary xlsx, imported through the real `POST /cases/import` endpoint, not a mock) that `grouped-by-body-part`, `grouped-by-day`, and `events` response shapes match what the new components consume — confirmed by reading API responses directly (`curl`), since no Chrome browser extension was available in this session to visually verify the popup/popover in-browser. **This is a gap**: sizing/positioning correctness (the 90%×90% acceptance criterion, popover clamping near viewport edges) has been verified by code/CSS reasoning only, not by rendering it.
 
-**Still gaps vs. PRD-Timeline-View.md** (unchanged from §4 below): Calendar is still a flat density grid, not the activity-strip + month-grid combination (§7.1–7.2); no legend redesign beyond the two simple legends added here; narrow-viewport (<860px) stacking behavior still unverified; empty/loading/error state copy still incomplete for the "no case loaded" paths.
+**Still gaps vs. PRD-Timeline-View.md** at the end of this session: Calendar's activity-strip + month-grid layout was still outstanding — closed in §4b below. Empty/loading/error state copy is still incomplete for the "no case loaded" paths (§5.4/§7.5).
+
+## 4b. Frontend — Calendar activity-strip + month-grid rewrite (2026-07-29)
+
+User supplied a reference screenshot (a "full case at a glance" activity strip + "month by month" calendar cards, matching the validated prototype `UI Concepts/v7_bodymap_calendar_split.html`) and asked for the Calendar panel to match it. This was the item deferred at the end of §4a. Rewrote `CalendarPanel.tsx` from the flat density grid to the real §7.1–7.2 layout:
+
+- **Activity strip**: GitHub-contributions-style grid (7 rows Sun–Sat, one column per week), horizontally scrollable, month labels positioned above the column where each new month starts. Built from a dense local day-map (the `grouped-by-day` endpoint only returns days with activity) so week alignment is correct even across gaps — ported the date-range padding/column logic from the prototype's `renderStrip()`.
+- **Month-by-month grid**: one card per month spanned by the case, weekday header row, leading blank cells for alignment, day cells shaded and labeled — ported from the prototype's `renderMonths()`. Uses `grid-template-columns: repeat(auto-fill, minmax(220px, 1fr))` so it's single-column at half-screen split width (PRD default) but flows into multiple columns on a wide viewport (PRD §10's "full-width standalone" case, and what the reference screenshot shows), without needing two separate layout code paths.
+- **Both color modes preserved**: intensity (5-step bucketed scale, capped at "4+") and medicine-type (dominant type's color, opacity scaled by volume via the existing `medicineTypeColors.ts` hash palette) — same `cellColor()` function drives both the strip and the month cards so they never mismatch.
+- **Legend**: "Less → More" swatches in intensity mode, one swatch+label per distinct medicine type in medicine-type mode, plus the static "Color reflects the most common care type that day, shaded by volume" caption — matches §7.3.
+- Accident-date ring and the cross-panel highlight outline (from `highlightedDays`) both carry over unchanged, now applied per-cell in both the strip and the month grids.
+- No changes to `CaseViewPage.tsx` or `CalendarDayPopover.tsx` — the prop contract (`days`, `colorMode`, `highlightedDays`, `accidentDate`, `onSelectDay`) was kept identical, so this was a self-contained component rewrite.
+
+**Verified visually this time** (unlike §4a): the Chrome extension still wasn't connected, but `google-chrome --headless --screenshot` against the real running dev servers (API + Vite) with the same hand-built sample case worked as a fallback, and the rendered output was compared directly against the user's reference screenshot — structure, headers, legend, and accident-date ring all matched. `tsc --noEmit` and `vite build` both clean.
+
+## 4c. Frontend — Body Map real silhouette + Calendar-left/Body-Map-right split (2026-07-29)
+
+User supplied a second reference screenshot (bubbles overlaid on an actual human silhouette figure, captioned "Bubble size = number of encounters" / "Color = most common care type for that area") and asked for the Body Map to match it and move to the right side, after the Calendar. Two changes:
+
+- **Real SVG silhouette**: new `BodyFigureSvg.tsx`, ported verbatim from the validated prototype's `<svg viewBox="0 0 280 560">` figure (head/neck/torso/arms/forearms/hands/legs/feet as basic shapes, `#dfe3f0` fill / `#c7cce3` stroke) — replaces the placeholder gray dashed box `BodyMapPanel.tsx` had been using since the scaffold. Same figure serves both Front and Back views per §5.2, unchanged.
+- **`bodyPartCoordinates.ts` coordinates recomputed**: previously these were ballpark percentages against an *imagined* figure and didn't correspond to any real silhouette. Replaced every entry with the prototype's actual pixel `COORDS` table converted to percentages of the same 280×560 viewBox (`x/280*100`, `y/560*100`), so hotspots now land precisely on the real figure instead of floating near it. The five extra terms beyond the prototype's set (Cervical Spine, Lower Back, Hip, Knee, Ankle) got hand-placed coordinates consistent with the same figure's proportions; their `view` (front/back/both) assignments were unchanged and still correct against the prototype's `FRONT_HIDE`/`BACK_SHOW` logic.
+- **Hotspot styling**: added the white 2px border + drop shadow the reference shows (`border: 2px solid #fff`, `box-shadow`), matching the prototype's `.hotspot` style, and added the two-line caption below the figure.
+- **Panel order**: `CaseViewPage.tsx` keeps Body Map *first* in DOM order (so narrow-viewport stacking still puts Body Map above Calendar, per §3) but wraps each panel in a `Box` with `order: 2` / `order: 1` inside the existing `@media (min-width: 860px)` block, so the desktop split renders Calendar-left / Body-Map-right without breaking the stacking requirement. No prop changes to either panel component.
+
+**Verified visually**: same `google-chrome --headless --screenshot` fallback against the live sample case — hotspots render directly on the silhouette (neck/shoulder positions confirmed correct for the test case's data), caption text present, Calendar panel on the left / Body Map on the right. `tsc --noEmit` and `vite build` both clean.
 
 ## 5. Known Working End-to-End Paths (verified by reading code, not by running it)
 
@@ -124,14 +148,14 @@ Don't re-flag these — they're documented MVP exclusions, not oversights:
 
 Roughly in the order that closes the biggest PRD-vs-code gaps first:
 
-1. ~~Body Map popup + Calendar day popover (`PRD-Timeline-View.md` §6–7.4).~~ Done 2026-07-29 (§4a) — **not yet visually verified in-browser**, see §4a caveat.
+1. ~~Body Map popup + Calendar day popover (`PRD-Timeline-View.md` §6–7.4).~~ Done 2026-07-29 (§4a).
 2. ~~Excel Import normalization fallbacks (§3 above) to match `PRD-Excel-Import.md` §4, plus the parser unit test suite it explicitly requires, plus the `importSummary`/`warnings` response shape.~~ Done 2026-07-29 (§3).
 3. ~~Accident-date visual markers on both panels.~~ Done 2026-07-29 (§4a).
 4. ~~Export button placeholders.~~ Done 2026-07-29 (§4a).
 5. ~~Expand the body-part coordinate config toward the full Appendix A list.~~ Done 2026-07-29 (§4a).
-6. Visually verify the new popup/popover in a real browser (sizing, positioning, resize behavior) — flagged as unverified in §4a.
-7. Calendar month-grid + activity-strip layout (§7.1–7.2) — still the largest remaining structural gap; current Calendar is a flat density grid.
-8. ~~Narrow-viewport (<860px) stacking verification.~~ Done 2026-07-29 (§4a) — breakpoint corrected to an exact 860px match; still not visually verified in-browser (same caveat as item 6).
+6. ~~Visually verify the popup/popover and narrow-viewport breakpoint in a real browser.~~ Done 2026-07-29 (§4b) — verified via headless-Chrome screenshot against a live case (Chrome extension still unavailable). Popup/popover sizing specifically was confirmed structurally but not resize-tested; low risk given pure CSS percentage sizing.
+7. ~~Calendar month-grid + activity-strip layout (§7.1–7.2).~~ Done 2026-07-29 (§4b).
+8. Remaining Body Map/Calendar polish: empty/loading/error state copy for §5.4/§7.5's "no case loaded" paths, "jump to month" control (§11, low priority per PRD).
 9. AI Chat spot-check log (five questions, expected answers, re-run before any demo).
 10. Remaining backend test gap: `MedicalEventsService` and `AiChatService`/`ToolExecutor` still have zero coverage (cases/milestones closed 2026-07-29, §3b).
 

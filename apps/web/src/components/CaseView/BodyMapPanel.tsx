@@ -1,6 +1,7 @@
 import { Box, Chip, Paper, Tooltip, Typography } from '@mui/material';
 import { lookupBodyPart, splitKnownAndUnknown } from '../../config/bodyPartCoordinates';
 import { colorForMedicineType } from '../../config/medicineTypeColors';
+import { BodyFigureSvg } from './BodyFigureSvg';
 import { BodyMapDetailPopup } from './BodyMapDetailPopup';
 import type { GroupedByBodyPart, MedicalEvent } from '../../types';
 
@@ -54,12 +55,12 @@ export function BodyMapPanel({
         sx={{
           position: 'relative',
           height: 420,
-          borderRadius: 1,
-          bgcolor: 'grey.100',
-          border: '1px dashed',
-          borderColor: 'grey.400',
+          aspectRatio: '280 / 560',
+          mx: 'auto',
         }}
       >
+        <BodyFigureSvg />
+
         {groups.length === 0 && (
           <Box
             sx={{
@@ -96,15 +97,16 @@ export function BodyMapPanel({
                   height: size,
                   borderRadius: '50%',
                   bgcolor: colorForMedicineType(group.dominantMedicineType),
+                  border: '2px solid #fff',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
                   outline: highlighted ? '3px solid' : 'none',
                   outlineColor: 'secondary.main',
-                  opacity: 0.9,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   transition: 'transform 120ms ease',
-                  '&:hover': { transform: 'translate(-50%, -50%) scale(1.1)' },
+                  '&:hover': { transform: 'translate(-50%, -50%) scale(1.15)' },
                 }}
               >
                 <Typography variant="caption" sx={{ color: '#fff', fontWeight: 700, lineHeight: 1 }}>
@@ -115,6 +117,12 @@ export function BodyMapPanel({
           );
         })}
       </Box>
+
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>
+        Bubble size = number of encounters
+        <br />
+        Color = most common care type for that area
+      </Typography>
 
       {selectedGroup && (
         <BodyMapDetailPopup
