@@ -6,6 +6,7 @@ Central index for this project's planning docs, requirements, and design artifac
 
 - [[README]] — what this project is, in brief
 - [[PRD-Overview]] — the problem, who it's for, and what "done" means for the MVP
+- [[Progress]] — audited status: what's built, what's stubbed, gaps vs. these PRDs
 
 ## 🏗️ Planning & Architecture
 

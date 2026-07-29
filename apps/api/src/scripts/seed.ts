@@ -27,10 +27,10 @@ async function seed() {
   );
 
   console.log(`Seeded case ${summary.caseId}`);
-  console.log(`  rows imported: ${summary.rowsImported}`);
-  console.log(`  rows skipped:  ${summary.rowsSkipped}`);
-  if (summary.issues.length > 0) {
-    console.log('  issues:', summary.issues);
+  console.log(`  rows imported: ${summary.importSummary.rowsImported}`);
+  console.log(`  rows skipped:  ${summary.importSummary.rowsSkipped}`);
+  if (summary.importSummary.warnings.length > 0) {
+    console.log('  warnings:', summary.importSummary.warnings);
   }
 
   await app.close();

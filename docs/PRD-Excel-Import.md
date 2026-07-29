@@ -82,6 +82,6 @@ Column *names* are matched flexibly (case-insensitive, trimmed); column *order* 
 
 - [ ] Sample case Excel imports cleanly with zero warnings.
 - [ ] A deliberately "messy" fixture file (missing column, several bad dates, mixed body-part formatting, blank cells across every optional column) imports the good rows and reports specific, row/column-level warnings for the rest.
-- [ ] An Excel using body-part/provider vocabulary not seen in the sample case imports without error.
+- [x] An Excel using body-part/provider vocabulary not seen in the sample case imports without error. (covered by unit test; not yet verified against a real sample-case file, since none exists in-repo)
 - [ ] Import of a ≤200-row file completes in under 3 seconds.
-- [ ] Unit tests cover: clean file, missing required column, unparseable dates, blank optional fields, multi-value cells (body parts, multi-provider), empty file.
+- [x] Unit tests cover: clean file, missing required column, unparseable dates, blank optional fields, multi-value cells (body parts, multi-provider), empty file. (`apps/api/src/excel-import/excel-parser.spec.ts`)

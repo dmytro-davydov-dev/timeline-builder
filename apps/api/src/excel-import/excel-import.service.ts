@@ -7,9 +7,11 @@ import { parseWorkbook } from './excel-parser';
 
 export interface ImportSummary {
   caseId: string;
-  rowsImported: number;
-  rowsSkipped: number;
-  issues: { row: number; column?: string; reason: string }[];
+  importSummary: {
+    rowsImported: number;
+    rowsSkipped: number;
+    warnings: { row: number; column?: string; reason: string }[];
+  };
 }
 
 @Injectable()
@@ -29,7 +31,7 @@ export class ExcelImportService {
     if (rows.length === 0) {
       throw new BadRequestException({
         message: 'No importable rows found',
-        issues,
+        warnings: issues,
       });
     }
 
@@ -61,9 +63,11 @@ export class ExcelImportService {
 
     return {
       caseId: result.id,
-      rowsImported: rows.length,
-      rowsSkipped: issues.length,
-      issues,
+      importSummary: {
+        rowsImported: rows.length,
+        rowsSkipped: issues.length,
+        warnings: issues,
+      },
     };
   }
 }

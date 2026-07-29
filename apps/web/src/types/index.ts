@@ -66,9 +66,11 @@ export interface GroupedByDay {
 
 export interface ImportSummary {
   caseId: string;
-  rowsImported: number;
-  rowsSkipped: number;
-  issues: { row: number; column?: string; reason: string }[];
+  importSummary: {
+    rowsImported: number;
+    rowsSkipped: number;
+    warnings: { row: number; column?: string; reason: string }[];
+  };
 }
 
 export interface ChatTurn {

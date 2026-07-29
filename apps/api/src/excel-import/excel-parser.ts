@@ -77,32 +77,23 @@ export async function parseWorkbook(buffer: Buffer): Promise<ParseResult> {
       continue;
     }
 
-    const provider = String(parsed['provider'] ?? '').trim();
-    const recordType = String(parsed['recordType'] ?? '').trim();
-    if (!provider) {
-      issues.push({
-        row: rowNumber,
-        column: 'Primary Provider',
-        reason: 'Missing required value',
-      });
-      continue;
-    }
-    if (!recordType) {
-      issues.push({
-        row: rowNumber,
-        column: 'Record Type',
-        reason: 'Missing required value',
-      });
-      continue;
-    }
+    const providerRaw = String(parsed['provider'] ?? '').trim();
+    const provider = providerRaw ? normalizeMultiValue(providerRaw, ';') : 'Unknown';
+    const recordType = String(parsed['recordType'] ?? '').trim() || 'Record';
+    const facility = optionalString(parsed['facility']) ?? 'Unknown facility';
+    const medicineType = optionalString(parsed['medicineType']) ?? 'Other';
+    const bodyPartsRaw = optionalString(parsed['bodyPartsRaw']);
+    const bodyPartsNormalized = bodyPartsRaw
+      ? normalizeMultiValue(bodyPartsRaw, ',')
+      : undefined;
 
     rows.push({
       date: parsedDate.toISOString(),
       provider,
       recordType,
-      facility: optionalString(parsed['facility']),
-      bodyPartsRaw: optionalString(parsed['bodyPartsRaw']),
-      medicineType: optionalString(parsed['medicineType']),
+      facility,
+      bodyPartsRaw: bodyPartsNormalized,
+      medicineType,
       summary: optionalString(parsed['summary']),
       pdfLink: optionalString(parsed['pdfLink']),
       rawRow,
@@ -120,4 +111,18 @@ function optionalString(value: unknown): string | undefined {
   if (value === null || value === undefined) return undefined;
   const s = String(value).trim();
   return s.length > 0 ? s : undefined;
+}
+
+/**
+ * Splits a delimiter-separated cell (multi-provider `;`, multi-body-part
+ * `,`) into trimmed elements and rejoins them, so downstream storage is
+ * consistently normalized regardless of source spacing (PRD-Excel-Import.md
+ * §4.4) — entity columns stay flat strings, split again on read.
+ */
+function normalizeMultiValue(raw: string, delimiter: string): string {
+  return raw
+    .split(delimiter)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(delimiter === ';' ? '; ' : ', ');
 }

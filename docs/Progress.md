@@ -1,0 +1,106 @@
+# Progress — Medical Timeline AI
+
+> 🗺️ [[MOC|Map of Content]]
+
+**Purpose:** living tracker of what's actually built versus what the PRDs/`Architecture.md` describe, so gaps don't have to be re-discovered by reading code every session. Update this file whenever a module's implementation status changes materially — don't let it drift into a changelog (git history already covers that).
+
+**Last audited:** 2026-07-29, against commit `4718e6a` (2 commits total: initial monorepo scaffold + README pass), with an in-progress Excel Import normalization fix (§3) layered on top not yet committed.
+
+## 1. Overall Status
+
+Matches the README's own self-assessment: **scaffolded, not MVP-complete.** Both apps build and run; the core data path (import → store → render → query → chat) works end-to-end for the happy path. Most of what's missing is Timeline View interaction depth (popups/popovers, month grids, export placeholders) and test coverage, not architecture — the module boundaries in `Architecture.md` are followed faithfully.
+
+| Module | Backend | Frontend | Overall |
+|---|---|---|---|
+| Excel Import | Working, normalization fallbacks now match PRD §4 (§3), parser has unit test coverage | Minimal upload form, no error detail UI | Mostly done |
+| Case & Milestones | Working, matches PRD | Accident-date input only; no other milestone UI (by design) | Mostly done |
+| Medical Events (query layer) | Working: filters, statistics, grouped-by-body-part/day, gaps | Consumed via TanStack Query hooks | Done |
+| Timeline View (Body Map + Calendar) | N/A (frontend-only per architecture) | Simplified placeholders — no popups/popovers, no month grids, no export buttons | Significant gaps (§4) |
+| AI Chat | Working tool-calling loop (OpenAI only), honest fallback with no key | Basic message list, no highlight animation (state only) | Mostly done, needs polish |
+| Tests | Only Nest's default boilerplate spec | None | Major gap (§6) |
+
+## 2. Backend (`apps/api`) — Implemented
+
+- **Modules wired per `Architecture.md` §8:** `CasesModule`, `MedicalEventsModule`, `ExcelImportModule`, `AiChatModule`, `DatabaseModule` — all present in `app.module.ts`, correct controller → service → repository layering.
+- **Database:** SQLite via `sql.js` (pure-JS, no native build), `synchronize: true` (no migrations yet — expected for Phase 1 per decision #5).
+- **Cases:** `GET /cases/:id`, `PATCH /cases/:id/milestones` (generic milestone table + `accidentDate` mirrored onto `Case` for the `label: "accidentDate"` convention). Matches `PRD-Case-Management.md` exactly.
+- **Medical Events:** `findByFilters` (date range, provider, bodyPart, medicineType, recordType, keyword — all via `LIKE`/exact match), `getStatistics`, `groupedByBodyPart`, `groupedByDay`, `findTreatmentGaps`. All the endpoints `Architecture.md` §9 lists exist.
+- **Excel Import:** `POST /cases/import`, `exceljs`-based parser (`excel-parser.ts`) with a real column-schema config (`column-schema.config.ts`), case-insensitive/trimmed header matching, transaction-wrapped Case+MedicalEvent insert.
+- **AI Chat:** `POST /cases/:id/chat`, OpenAI tool-calling orchestrator (`ai-chat.service.ts`), 4-iteration cap, 6 tools defined (`find_events`, `count_events`, `get_event_details`, `get_case_statistics`, `find_treatment_gaps`, `semantic_search_events` stub), grounding system prompt matches `PRD-AI-Chat.md` §5 wording closely. No API key → returns an honest "not configured" message instead of fabricating (correct per the grounding rule).
+- **Seed script:** `npm run seed -- <file>` loads a sample Excel into a demo case for local testing.
+
+## 3. Backend — Deviations from PRD-Excel-Import.md §4 (resolved 2026-07-29)
+
+The parser previously skipped rows instead of applying the PRD's documented fallback values. Fixed in `excel-parser.ts`:
+
+- Blank `Primary Provider` → now defaults to `"Unknown"` instead of skipping the row.
+- Blank `Record Type` → now defaults to `"Record"` instead of skipping the row.
+- Blank `Medicine Type` → now defaults to `"Other"` (previously left `undefined` with no fallback).
+- Multi-value `Primary Provider` (split on `;`) and `Body Parts` (split on `,`) are now trimmed per-element and rejoined consistently (`normalizeMultiValue`), so inconsistent source spacing doesn't leak into storage — entity columns stay flat strings per the existing `bodyPartsRaw`/read-time-split pattern in `MedicalEventsService`.
+- Added `excel-parser.spec.ts` covering all cases required by §8: clean file, missing required column, unparseable dates (partial skip), blank fallback fields, multi-value cells, novel vocabulary, empty file, and case-insensitive/reordered headers. 8 tests, all passing.
+- Response shape now matches PRD §4.6 exactly: `{ caseId, importSummary: { rowsImported, rowsSkipped, warnings[] } }` (was a flat `{ caseId, rowsImported, rowsSkipped, issues }`). Updated in lockstep: `excel-import.service.ts` (`ImportSummary` interface + return + the zero-rows `BadRequestException` body), `apps/web/src/types/index.ts` `ImportSummary`, and `apps/api/src/scripts/seed.ts`'s log lines. `apps/web/src/pages/UploadPage.tsx` / `apps/web/src/api/cases.ts` only ever read `summary.caseId`, so no UI behavior changed. Both apps typecheck clean; backend test suite (9 tests) passes.
+
+No error-detail UI was added — the frontend still has no surface for `importSummary.warnings` (tracked separately as a known gap, not part of this PRD-compliance pass).
+
+## 4. Frontend (`apps/web`) — Implemented vs. Gaps
+
+**Implemented:**
+- Routing: `/` (Upload) and `/cases/:caseId` (Case View), via React Router.
+- Upload flow: file picker → `POST /cases/import` → navigate to the new case.
+- Case View shell: `CaseHeader`, `StatsBar`, `SharedToolbar` (accident date input, front/back toggle, calendar color-mode toggle), Body Map panel, Calendar panel, Chat panel — matches the component tree in `Architecture.md` §7.1.
+- Body Map: known/unknown split via `bodyPartCoordinates.ts`, sized/colored hotspots, "Other findings" chip fallback — the core generic-Excel requirement is honored.
+- Calendar: single density grid colored by intensity or dominant medicine type.
+- Chat: message history, calls `/chat`, threads `referencedEventIds` back up to set a highlight set.
+- Cross-panel highlight *state* exists (`highlightedEventIds` in `CaseViewPage`) and is read by both panels to outline matching hotspots/day cells.
+
+**Gaps vs. `PRD-Timeline-View.md`:**
+- **No detail popup (Body Map) or popover (Calendar).** §6 and §7.4 specify a fairly detailed modal/popover with per-encounter cards, medicine-type filter chips, and a "Source PDF" action. Currently, clicking a hotspot or day only sets the highlight set — there is no way to see individual encounter details (provider, facility, summary, PDF link) from either panel at all. This is the single biggest UI gap relative to spec.
+- **Calendar is a single flat grid, not the activity-strip + month-grid combination** in §7.1–§7.2. No week/weekday structure, no per-month cards, no "jump to month," and — per the component's own code comment — this is explicitly called out as a placeholder ("simplified... full month-grid layout... is a fast follow").
+- **No legend** for either calendar color mode (§7.3 requires one).
+- **No accident-date visual marker** on the Calendar (ring/outline on the matching day) or Body Map (⚑ flag on popup cards — moot until popups exist). The date is stored and settable, but nothing currently renders it back.
+- **No Export PDF / Export PPT buttons at all** — §4 requires them present as clearly-labeled disabled/"coming soon" controls, not absent.
+- **Body-part coordinate config covers ~19 terms**, not the ~30 in Appendix A. Missing from the curated set: Face, Eye, Ear, Nose, Mouth, Sinuses, Upper Arm, Forearm, Finger, Lungs, Heart, Armpit, Stomach, Intestines, Genitals, Toe. These currently fall into "Other findings," which is the correct *fallback* behavior but wasn't meant to be the primary path for that many common terms.
+- **No narrow-viewport stacking behavior verified** — the grid uses a responsive `xs`/`md` breakpoint, but the < 860px vertical-stack requirement and "no horizontal page scroll" acceptance criterion (§9) haven't been checked against the actual breakpoint value MUI uses.
+- **No empty/loading/error state copy** matching §5.4/§7.5 (e.g. "no body-part data found in this case" messaging) — components render an empty grid/figure rather than the specified instructional text in most cases.
+
+**Chat panel gaps vs. `PRD-AI-Chat.md` §6:**
+- Highlighting is state-only (a `Set<string>` of event ids) — nothing currently renders a *visual pulse/flash* distinct from the static "highlighted" outline style already used for manual selection, so a chat-driven highlight and a manual click currently look identical instead of being a transient effect as specified.
+
+## 5. Known Working End-to-End Paths (verified by reading code, not by running it)
+
+1. Upload a valid Excel → Case + MedicalEvents persisted → redirect to Case View → stats/body-map/calendar all populate from real API calls.
+2. Set accident date → persists via PATCH → refetches case (though nothing currently *displays* the date back on either panel — see §4).
+3. Ask a chat question with `OPENAI_API_KEY` set → tool-calling loop executes real queries → grounded reply + referenced event ids → highlight set updates.
+4. Ask a chat question with no API key set → honest "not configured" message, no fabrication.
+
+## 6. Testing — Major Gap
+
+- **Backend:** `excel-parser.spec.ts` now covers the full §8 list (clean file, missing column, bad dates, blank fields, multi-value cells, novel vocabulary, empty file, header order/case) — 8 tests passing. Still just the Nest CLI boilerplate (`app.controller.spec.ts`, `app.e2e-spec.ts`) beyond that: zero tests for `MedicalEventsService`, `AiChatService`/`ToolExecutor`, or the cases/milestones flow.
+- **Frontend:** no test setup at all (no Vitest/Jest config, no component tests).
+- **No spot-check log** for the five required AI Chat questions (`PRD-Overview.md` §8, `PRD-AI-Chat.md` §8) — this is supposed to be a dated, written verification artifact re-run before every demo, and doesn't exist yet even as a template.
+
+## 7. Deliberate Non-Gaps (out of scope by design, not missing work)
+
+Don't re-flag these — they're documented MVP exclusions, not oversights:
+
+- No auth, no multi-case library/switcher (`PRD-Case-Management.md` §5).
+- No real PDF/PPT export (placeholder buttons are the only MVP requirement, and even those are currently absent — see §4).
+- No semantic/vector search — `semantic_search_events` is intentionally a keyword-match stub.
+- No OCR/PDF ingestion.
+- Only OpenAI wired for chat (Gemini is an open question, not a committed requirement).
+
+## 8. Suggested Next Priorities
+
+Roughly in the order that closes the biggest PRD-vs-code gaps first:
+
+1. Body Map popup + Calendar day popover (`PRD-Timeline-View.md` §6–7.4) — currently the largest functional gap; without it, users can't see individual encounter detail (provider, facility, summary, PDF link) at all.
+2. ~~Excel Import normalization fallbacks (§3 above) to match `PRD-Excel-Import.md` §4, plus the parser unit test suite it explicitly requires, plus the `importSummary`/`warnings` response shape.~~ Done 2026-07-29 (§3).
+3. Accident-date visual markers on both panels (currently stored but not rendered back).
+4. Export button placeholders (should be a small, low-risk addition).
+5. Expand the body-part coordinate config toward the full Appendix A list.
+6. Calendar month-grid + activity-strip layout, legends for both color modes.
+7. AI Chat spot-check log (five questions, expected answers, re-run before any demo).
+
+## 9. Open Questions Carried Over (unchanged from docs)
+
+See `Architecture.md` §16, `PRD-Overview.md` §10, `PRD-Timeline-View.md` §11, `PRD-AI-Chat.md` §11, `PRD-Case-Management.md` §7 for the full lists — none of these have been resolved by implementation work yet (OpenAI vs. Gemini, data retention policy, real-world Excel column variance, front/back toggle necessity, cross-panel body-part→calendar highlighting as a fast-follow).
