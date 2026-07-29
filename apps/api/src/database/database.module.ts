@@ -2,6 +2,14 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import * as path from 'path';
+// Unused directly — forces sql.js into serverless bundlers' dependency trace.
+// TypeORM loads its driver package via a dynamic `require(driverPackage)`
+// based on the `type` string below, which static tracers (e.g. Vercel's
+// function bundler) can't follow, so they drop sql.js from the deployed
+// bundle and it fails at runtime with DriverPackageNotInstalledError. A
+// plain static import of the same package elsewhere in the reachable graph
+// makes it visible to the tracer without changing any behavior here.
+import 'sql.js';
 import { Case } from '../cases/entities/case.entity';
 import { Milestone } from '../cases/entities/milestone.entity';
 import { MedicalEvent } from '../medical-events/entities/medical-event.entity';
