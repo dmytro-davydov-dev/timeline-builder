@@ -1,0 +1,23 @@
+{
+  "name": "medical-timeline",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Medical Timeline AI — monorepo (apps/web, apps/api)",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/api & npm run dev --workspace=apps/web",
+    "dev:api": "npm run start:dev --workspace=apps/api",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "build": "npm run build --workspace=apps/api && npm run build --workspace=apps/web",
+    "build:api": "npm run build --workspace=apps/api",
+    "build:web": "npm run build --workspace=apps/web",
+    "lint": "npm run lint --workspace=apps/api && npm run lint --workspace=apps/web",
+    "test": "npm run test --workspace=apps/api",
+    "seed": "npm run seed --workspace=apps/api"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
