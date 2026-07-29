@@ -10,6 +10,14 @@ import * as path from 'path';
 // plain static import of the same package elsewhere in the reachable graph
 // makes it visible to the tracer without changing any behavior here.
 import 'sql.js';
+// Same problem, one level deeper: sql.js's own wasm loader builds the path
+// to `sql-wasm.wasm` at runtime via string concatenation (`__dirname + "/" +
+// "sql-wasm.wasm"`), which static tracers also can't follow — so the JS
+// glue file gets bundled but the wasm binary it needs doesn't, and it fails
+// at runtime with ENOENT for sql-wasm.wasm. A literal require.resolve() of
+// the same path (verified against @vercel/nft directly) makes the tracer
+// pick up the binary too, without loading or executing it.
+require.resolve('sql.js/dist/sql-wasm.wasm');
 import { Case } from '../cases/entities/case.entity';
 import { Milestone } from '../cases/entities/milestone.entity';
 import { MedicalEvent } from '../medical-events/entities/medical-event.entity';
