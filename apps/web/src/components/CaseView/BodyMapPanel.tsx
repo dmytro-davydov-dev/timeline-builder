@@ -139,14 +139,20 @@ export function BodyMapPanel({
             Other findings (not in the coordinate map yet)
           </Typography>
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
-            {unknown.map((part) => (
-              <Chip
-                key={part}
-                size="small"
-                label={`${part} (${byName.get(part)?.count ?? 0})`}
-                onClick={() => onSelectBodyPart(byName.get(part)!)}
-              />
-            ))}
+            {unknown.map((part) => {
+              const highlighted = highlightedBodyParts.has(part);
+              return (
+                <Chip
+                  key={part}
+                  size="small"
+                  label={`${part} (${byName.get(part)?.count ?? 0})`}
+                  onClick={() => onSelectBodyPart(byName.get(part)!)}
+                  color={highlighted ? 'secondary' : 'default'}
+                  variant={highlighted ? 'filled' : 'outlined'}
+                  sx={highlighted ? { outline: '2px solid', outlineColor: 'secondary.main' } : undefined}
+                />
+              );
+            })}
           </Box>
         </Box>
       )}

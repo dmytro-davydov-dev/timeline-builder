@@ -132,6 +132,15 @@ User supplied a third reference screenshot (dark gradient header bar, light-gray
 
 **Verified visually**: `google-chrome --headless --screenshot` against the live sample case, including a cropped close-up of the segmented toggles specifically to confirm the active-state fix (the bug above was only visible at zoom, not in the full-page screenshot). `tsc --noEmit` and `vite build` both clean.
 
+## 4e. AI Chat closeout — tests, spot-check log, Other-findings highlight fix (2026-07-29)
+
+Ran `/goal implement PRD-AI-Chat.md`. Found the feature already substantially built (backend orchestrator, tool schemas/executor, `ChatPanel.tsx`, cross-panel highlight wiring — see §4d/§5) from prior sessions; this pass closed the three gaps §6/§8 had explicitly flagged as outstanding, plus one real bug found while verifying the highlight-degradation acceptance criterion:
+
+- **Backend test gap closed**: added `ai-chat/ai-chat.service.spec.ts` (4 tests: no-API-key honest fallback, tool-free final answer, one tool-call round trip with `referencedEventIds` collection, and the iteration cap — asserts `fetch` is called exactly `MAX_ITERATIONS` (4) times when the model keeps requesting tool calls) and `ai-chat/tools/tool-executor.spec.ts` (8 tests, one per tool including the unknown-tool-name error path and the `semantic_search_events` keyword-stub mapping). 27/27 backend tests pass; `tsc --noEmit` clean.
+- **Bug found and fixed**: `BodyMapPanel.tsx`'s "Other findings" chips (the unmapped-body-part bucket) never reflected `highlightedBodyParts` — only the positioned hotspots did, even though the set already includes unmapped parts by construction in `CaseViewPage.tsx`. This directly violated §6/§10's "the highlight behavior must degrade the same way the Body Map's own rendering does, not silently skip unmapped parts." Fixed by giving highlighted chips a `secondary`-colored filled variant + outline, same visual language as the hotspot highlight ring. `tsc --noEmit` and `vite build` clean after the fix.
+- **Spot-check log created**: `docs/AI-Chat-Spot-Check.md`, per §8's non-functional requirement for a dated, written verification artifact. Used the actual seeded "Caldwell - Medical Chronology" demo case (`8188befc-f1ae-4e9d-b00f-f6c4c79a0d98`, 130 events) and computed every expected answer directly from the sqlite db via SQL/Python — independent of the tool-calling code path, so the log isn't circularly re-testing itself. Notable finding while building it: this demo case is a shoulder-injury case (96 "Shoulder" events, PT count exactly 42 — matching the PRD's own "42 PT sessions" example almost verbatim, strong signal this is the intended reference case) with **zero** lumbar-spine events, so Q3 was adapted from the PRD's generic "lumbar spine" example to "shoulder," and the PRD's own "not found" acceptance criterion is tested using lumbar spine instead (0 matches, real data — not synthesized for the test).
+- **Still an open gap, called out honestly in the log rather than faked**: the log's Actual/Pass columns are unfilled because no `OPENAI_API_KEY` is configured in this environment, so the live grounding behavior (does the model actually answer these 5 questions correctly against real tool results) has not been exercised end-to-end with a real LLM this session — only the orchestration mechanics (iteration cap, tool dispatch, fallback messaging) are covered by the new unit tests. Whoever has API-key access should run the 5 questions through the real chat endpoint and fill in the log before the next demo.
+
 ## 5. Known Working End-to-End Paths (verified by reading code, not by running it)
 
 1. Upload a valid Excel → Case + MedicalEvents persisted → redirect to Case View → stats/body-map/calendar all populate from real API calls.
@@ -141,9 +150,9 @@ User supplied a third reference screenshot (dark gradient header bar, light-gray
 
 ## 6. Testing — Major Gap
 
-- **Backend:** `excel-parser.spec.ts` covers the full §8 list (clean file, missing column, bad dates, blank fields, multi-value cells, novel vocabulary, empty file, header order/case) — 8 tests passing. `cases.service.spec.ts` (§3b) now covers milestone creation/update and the `accidentDate` mirroring convention — 6 tests passing. Still just the Nest CLI boilerplate (`app.controller.spec.ts`, `app.e2e-spec.ts`) beyond that: zero tests for `MedicalEventsService` or `AiChatService`/`ToolExecutor`.
+- **Backend:** `excel-parser.spec.ts` covers the full §8 list (clean file, missing column, bad dates, blank fields, multi-value cells, novel vocabulary, empty file, header order/case) — 8 tests passing. `cases.service.spec.ts` (§3b) now covers milestone creation/update and the `accidentDate` mirroring convention — 6 tests passing. `ai-chat.service.spec.ts` and `tools/tool-executor.spec.ts` (§4e) now cover the orchestrator and tool dispatch — 12 tests passing. 27/27 total. Still zero coverage for `MedicalEventsService` itself (filters/statistics/gaps query logic).
 - **Frontend:** no test setup at all (no Vitest/Jest config, no component tests).
-- **No spot-check log** for the five required AI Chat questions (`PRD-Overview.md` §8, `PRD-AI-Chat.md` §8) — this is supposed to be a dated, written verification artifact re-run before every demo, and doesn't exist yet even as a template.
+- ~~No spot-check log for the five required AI Chat questions~~ Done 2026-07-29 (§4e) — `docs/AI-Chat-Spot-Check.md` created with ground-truth expected answers from the seeded case; Actual/Pass columns still need a real `OPENAI_API_KEY` run to fill in (see §4e's last bullet).
 
 ## 7. Deliberate Non-Gaps (out of scope by design, not missing work)
 
@@ -167,8 +176,9 @@ Roughly in the order that closes the biggest PRD-vs-code gaps first:
 6. ~~Visually verify the popup/popover and narrow-viewport breakpoint in a real browser.~~ Done 2026-07-29 (§4b) — verified via headless-Chrome screenshot against a live case (Chrome extension still unavailable). Popup/popover sizing specifically was confirmed structurally but not resize-tested; low risk given pure CSS percentage sizing.
 7. ~~Calendar month-grid + activity-strip layout (§7.1–7.2).~~ Done 2026-07-29 (§4b).
 8. Remaining Body Map/Calendar polish: empty/loading/error state copy for §5.4/§7.5's "no case loaded" paths, "jump to month" control (§11, low priority per PRD).
-9. AI Chat spot-check log (five questions, expected answers, re-run before any demo).
-10. Remaining backend test gap: `MedicalEventsService` and `AiChatService`/`ToolExecutor` still have zero coverage (cases/milestones closed 2026-07-29, §3b).
+9. ~~AI Chat spot-check log (five questions, expected answers, re-run before any demo).~~ Done 2026-07-29 (§4e) — template + ground-truth answers exist; still needs a real-model run to fill in Actual/Pass.
+10. ~~Remaining backend test gap: `AiChatService`/`ToolExecutor` had zero coverage.~~ Done 2026-07-29 (§4e). `MedicalEventsService` itself (filters/statistics/gaps) still has zero direct test coverage.
+11. Fill in `docs/AI-Chat-Spot-Check.md`'s Actual/Pass columns by running the 5 questions through the real chat endpoint with `OPENAI_API_KEY` configured.
 
 ## 9. Open Questions Carried Over (unchanged from docs)
 
