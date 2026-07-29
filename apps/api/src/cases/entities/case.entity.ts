@@ -29,7 +29,10 @@ export class Case {
    * row) because every panel reads it on every render — see
    * docs/Architecture.md §6.
    */
-  @Column({ type: 'datetime', nullable: true })
+  // No explicit `type: 'datetime'` — TypeORM infers the right DDL type per
+  // driver from the Date design-type ("datetime" on sql.js, "timestamp
+  // without time zone" on Postgres); see database.module.ts.
+  @Column({ nullable: true })
   accidentDate?: Date | null;
 
   @CreateDateColumn()

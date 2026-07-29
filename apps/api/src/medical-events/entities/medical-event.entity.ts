@@ -26,7 +26,9 @@ export class MedicalEvent {
   @JoinColumn({ name: 'caseId' })
   case: Case;
 
-  @Column({ type: 'datetime' })
+  // See cases/entities/case.entity.ts — no explicit `type: 'datetime'`,
+  // inferred per driver (datetime on sql.js, timestamp on Postgres).
+  @Column()
   date: Date;
 
   /** e.g. "Office Visit", "MRI", "PT Session", "ER Visit" */

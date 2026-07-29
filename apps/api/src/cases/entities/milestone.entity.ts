@@ -30,6 +30,7 @@ export class Milestone {
   @Column()
   label: string;
 
-  @Column({ type: 'datetime' })
+  // See case.entity.ts — no explicit `type: 'datetime'`, inferred per driver.
+  @Column()
   date: Date;
 }
