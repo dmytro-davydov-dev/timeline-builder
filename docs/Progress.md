@@ -4,7 +4,7 @@
 
 **Purpose:** living tracker of what's actually built versus what the PRDs/`Architecture.md` describe, so gaps don't have to be re-discovered by reading code every session. Update this file whenever a module's implementation status changes materially — don't let it drift into a changelog (git history already covers that).
 
-**Last audited:** 2026-07-29, against commit `1892384` (case management), with Timeline View popup/popover work (§4a), the Calendar activity-strip/month-grid rewrite (§4b), and the Body Map silhouette + panel-order swap (§4c) layered on top, not yet committed.
+**Last audited:** 2026-07-29, against commit `1892384` (case management), with Timeline View popup/popover work (§4a), the Calendar activity-strip/month-grid rewrite (§4b), the Body Map silhouette + panel-order swap (§4c), and the header/stats-bar/toolbar restyle (§4d) layered on top, not yet committed.
 
 ## 1. Overall Status
 
@@ -120,6 +120,17 @@ User supplied a second reference screenshot (bubbles overlaid on an actual human
 - **Panel order**: `CaseViewPage.tsx` keeps Body Map *first* in DOM order (so narrow-viewport stacking still puts Body Map above Calendar, per §3) but wraps each panel in a `Box` with `order: 2` / `order: 1` inside the existing `@media (min-width: 860px)` block, so the desktop split renders Calendar-left / Body-Map-right without breaking the stacking requirement. No prop changes to either panel component.
 
 **Verified visually**: same `google-chrome --headless --screenshot` fallback against the live sample case — hotspots render directly on the silhouette (neck/shoulder positions confirmed correct for the test case's data), caption text present, Calendar panel on the left / Body Map on the right. `tsc --noEmit` and `vite build` both clean.
+
+## 4d. Frontend — Header/stats-bar/toolbar restyle + "Longest quiet stretch" stat (2026-07-29)
+
+User supplied a third reference screenshot (dark gradient header bar, light-gray stat cards with a red "alert" card, navy-pill segmented toggles) and asked for the stats bar to gain a "Longest quiet stretch" card and for the styling to match. Traced the screenshot to a *different* prototype variant than the ones used in §4a–§4c — `UI Concepts/v6_calendar_heatmap.html`, not `v7_bodymap_calendar_split.html` — and matched its exact stat-card set, wording, and the `gap > 21` alert threshold rather than guessing.
+
+- **New stat — Longest quiet stretch**: sourced from the existing `GET /cases/:id/events/gaps` endpoint (`findTreatmentGaps`, already implemented, previously unused by the frontend) called with `thresholdDays=0` so *every* consecutive-event gap comes back, then taking the max client-side (`useTreatmentGaps` hook added to `api/cases.ts`; `TreatmentGap` type added to `types/index.ts`). No backend changes — the data was already there.
+- **`StatsBar.tsx` rewritten**: now takes explicit `{ encounters, treatmentSpanDays, daysWithActivity, longestQuietStretchDays }` instead of the raw `CaseStatistics` object, and renders exactly the four cards the reference shows (dropped the previous Providers/Body-parts cards, which the reference doesn't include). The quiet-stretch card turns red (`#fef2f2` bg, `#b91c1c` text) only when the gap exceeds 21 days, matching the prototype's `gap>21?'alert':''` logic exactly — not unconditionally red.
+- **`CaseHeader.tsx` rewritten**: full-bleed dark navy gradient bar (moved outside the page's `Container` in `CaseViewPage.tsx` so it spans edge-to-edge), brand dot + case name + static subtitle, and the Export PDF / Export PPT buttons *moved here from `SharedToolbar`* (matches the reference's action-button grouping) alongside the existing "Load different Excel" link. Export buttons keep their disabled + "Coming soon" tooltip treatment from §4a.
+- **`SharedToolbar.tsx` restyled**: segmented Front/Back and Color-mode toggles now render as a light-gray pill container with a solid navy active button, matching the reference's `.seg`/`.seg button.active` CSS. First attempt styled the active state via a `'& .Mui-selected'` selector on the `ToggleButtonGroup`'s `sx` and it silently lost to MUI's own higher-specificity selected-state styles (active buttons rendered as barely-visible white-on-light-gray instead of white-on-navy) — caught by screenshot verification, not by typecheck/build, since it's a runtime style-cascade issue. Fixed by computing each `ToggleButton`'s `sx` explicitly from whether its value matches the currently-selected one, rather than relying on MUI's `.Mui-selected` class winning the cascade.
+
+**Verified visually**: `google-chrome --headless --screenshot` against the live sample case, including a cropped close-up of the segmented toggles specifically to confirm the active-state fix (the bug above was only visible at zoom, not in the full-page screenshot). `tsc --noEmit` and `vite build` both clean.
 
 ## 5. Known Working End-to-End Paths (verified by reading code, not by running it)
 

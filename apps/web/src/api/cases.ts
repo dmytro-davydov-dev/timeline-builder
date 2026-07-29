@@ -10,6 +10,7 @@ import type {
   GroupedByDay,
   ImportSummary,
   MedicalEvent,
+  TreatmentGap,
 } from '../types';
 
 // All server state goes through TanStack Query, keyed by caseId
@@ -94,6 +95,20 @@ export function useGroupedByBodyPart(caseId: string | undefined) {
     queryFn: async () => {
       const { data } = await apiClient.get<GroupedByBodyPart[]>(
         `/cases/${caseId}/events/grouped-by-body-part`,
+      );
+      return data;
+    },
+    enabled: Boolean(caseId),
+  });
+}
+
+export function useTreatmentGaps(caseId: string | undefined, thresholdDays = 0) {
+  return useQuery({
+    queryKey: ['treatment-gaps', caseId, thresholdDays],
+    queryFn: async () => {
+      const { data } = await apiClient.get<TreatmentGap[]>(
+        `/cases/${caseId}/events/gaps`,
+        { params: { thresholdDays } },
       );
       return data;
     },

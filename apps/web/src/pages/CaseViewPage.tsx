@@ -8,6 +8,7 @@ import {
   useGroupedByDay,
   useSetMilestone,
   useStatistics,
+  useTreatmentGaps,
 } from '../api/cases';
 import { CaseHeader } from '../components/CaseView/CaseHeader';
 import { StatsBar } from '../components/CaseView/StatsBar';
@@ -31,6 +32,7 @@ export function CaseViewPage() {
   const groupedByBodyPartQuery = useGroupedByBodyPart(caseId);
   const groupedByDayQuery = useGroupedByDay(caseId);
   const eventsQuery = useEvents(caseId, {});
+  const treatmentGapsQuery = useTreatmentGaps(caseId, 0);
   const setMilestone = useSetMilestone(caseId);
 
   const [bodyView, setBodyView] = useState<'front' | 'back'>('front');
@@ -107,11 +109,22 @@ export function CaseViewPage() {
     ? selectedDay.eventIds.map((id) => eventsById.get(id)).filter((e): e is NonNullable<typeof e> => Boolean(e))
     : [];
 
+  const gaps = treatmentGapsQuery.data ?? [];
+  const longestQuietStretchDays = gaps.length ? Math.max(...gaps.map((g) => g.gapDays)) : 0;
+
   return (
-    <Container maxWidth="xl" sx={{ py: 2 }}>
+    <>
       <CaseHeader caseData={caseQuery.data} />
 
-      {statisticsQuery.data && <StatsBar statistics={statisticsQuery.data} />}
+      <Container maxWidth="xl" sx={{ py: 2 }}>
+        {statisticsQuery.data && (
+          <StatsBar
+            encounters={statisticsQuery.data.totalEvents}
+            treatmentSpanDays={statisticsQuery.data.dateSpan.days}
+            daysWithActivity={groupedDays.length}
+            longestQuietStretchDays={longestQuietStretchDays}
+          />
+        )}
 
       <SharedToolbar
         caseData={caseQuery.data}
@@ -181,12 +194,13 @@ export function CaseViewPage() {
         />
       )}
 
-      <Box sx={{ mt: 2 }}>
-        <ChatPanel
-          caseId={caseQuery.data.id}
-          onReferencedEventIds={(ids) => setHighlightedEventIds(new Set(ids))}
-        />
-      </Box>
-    </Container>
+        <Box sx={{ mt: 2 }}>
+          <ChatPanel
+            caseId={caseQuery.data.id}
+            onReferencedEventIds={(ids) => setHighlightedEventIds(new Set(ids))}
+          />
+        </Box>
+      </Container>
+    </>
   );
 }

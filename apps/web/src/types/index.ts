@@ -50,6 +50,12 @@ export interface CaseStatistics {
   byBodyPart: Record<string, number>;
 }
 
+export interface TreatmentGap {
+  from: string;
+  to: string;
+  gapDays: number;
+}
+
 export interface GroupedByBodyPart {
   bodyPart: string;
   count: number;
