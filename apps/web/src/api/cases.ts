@@ -35,6 +35,27 @@ export function useImportCase() {
   });
 }
 
+/**
+ * Backs the root route's auto-open behavior: Phase 1 is
+ * single-case-per-session with no case switcher (docs/PRD-Case-Management.md
+ * §2), so on startup the app should skip the Upload screen and jump
+ * straight into whatever case exists — the DefaultCaseSeeder-created demo
+ * case (apps/api/src/excel-import/default-case-seeder.service.ts) on a
+ * fresh install, or a user's own case afterward. `retry: false` so a 404
+ * (no case exists yet, e.g. the seed asset is missing) fails fast and falls
+ * back to the Upload screen instead of retrying for several seconds.
+ */
+export function useDefaultCase() {
+  return useQuery({
+    queryKey: ['case', 'default'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<Case>('/cases/default');
+      return data;
+    },
+    retry: false,
+  });
+}
+
 export function useCase(caseId: string | undefined) {
   return useQuery({
     queryKey: ['case', caseId],

@@ -49,7 +49,7 @@ export function CaseHeader({ caseData }: { caseData: Case }) {
       </Box>
 
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-        <Button component={RouterLink} to="/" size="small" variant="outlined" sx={headerButtonSx}>
+        <Button component={RouterLink} to="/upload" size="small" variant="outlined" sx={headerButtonSx}>
           Load different Excel
         </Button>
         <Tooltip title="Coming soon">

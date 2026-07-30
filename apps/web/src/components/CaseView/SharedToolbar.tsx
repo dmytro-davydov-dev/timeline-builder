@@ -68,11 +68,47 @@ export function SharedToolbar({
     <Stack
       direction="row"
       spacing={2.5}
-      sx={{ py: 2, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}
+      sx={{ py: 2, alignItems: 'flex-end', flexWrap: 'wrap' }}
     >
       <Box>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
-          Date of loss
+          Timeline
+        </Typography>
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          value={calendarColorMode}
+          onChange={(_, v) => v && onCalendarColorModeChange(v)}
+          sx={segGroupSx}
+        >
+          <ToggleButton value="intensity" sx={segButtonSx(calendarColorMode === 'intensity')}>
+            Frequency of events
+          </ToggleButton>
+          <ToggleButton value="medicineType" sx={segButtonSx(calendarColorMode === 'medicineType')}>
+            Medicine type
+          </ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
+
+      <Box>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
+          Body map
+        </Typography>
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          value={bodyView}
+          onChange={(_, v) => v && onBodyViewChange(v)}
+          sx={segGroupSx}
+        >
+          <ToggleButton value="front" sx={segButtonSx(bodyView === 'front')}>Front</ToggleButton>
+          <ToggleButton value="back" sx={segButtonSx(bodyView === 'back')}>Back</ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
+
+      <Box>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
+          Date of accident
         </Typography>
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
           <TextField
@@ -92,40 +128,14 @@ export function SharedToolbar({
         </Box>
       </Box>
 
-      <ToggleButtonGroup
-        size="small"
-        exclusive
-        value={bodyView}
-        onChange={(_, v) => v && onBodyViewChange(v)}
-        sx={segGroupSx}
-      >
-        <ToggleButton value="front" sx={segButtonSx(bodyView === 'front')}>Front</ToggleButton>
-        <ToggleButton value="back" sx={segButtonSx(bodyView === 'back')}>Back</ToggleButton>
-      </ToggleButtonGroup>
-
-      <ToggleButtonGroup
-        size="small"
-        exclusive
-        value={calendarColorMode}
-        onChange={(_, v) => v && onCalendarColorModeChange(v)}
-        sx={segGroupSx}
-      >
-        <ToggleButton value="intensity" sx={segButtonSx(calendarColorMode === 'intensity')}>
-          Color: Intensity
-        </ToggleButton>
-        <ToggleButton value="medicineType" sx={segButtonSx(calendarColorMode === 'medicineType')}>
-          Color: Medicine type
-        </ToggleButton>
-      </ToggleButtonGroup>
-
-      <Button
-        size="small"
-        variant="outlined"
-        onClick={onOpenChat}
-        sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}
-      >
-        Ask AI about this case
-      </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={onOpenChat}
+          sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}
+        >
+          Ask AI about this case
+        </Button>
     </Stack>
   );
 }

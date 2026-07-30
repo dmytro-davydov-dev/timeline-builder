@@ -28,6 +28,23 @@ export class CasesService {
   }
 
   /**
+   * Phase 1 is single-case-per-session (docs/PRD-Case-Management.md §2) —
+   * no multi-case switcher UI yet, so "the default case" is simply the
+   * oldest one on record: the DefaultCaseSeeder-created demo case on a
+   * fresh install, or whichever case a user has since imported first. Used
+   * by the frontend's root route to skip the Upload screen on startup.
+   */
+  async findDefault(): Promise<Case> {
+    const [found] = await this.cases.find({
+      order: { createdAt: 'ASC' },
+      relations: { milestones: true },
+      take: 1,
+    });
+    if (!found) throw new NotFoundException('No case exists yet');
+    return found;
+  }
+
+  /**
    * `label: "accidentDate"` is the documented convention the frontend treats
    * specially (docs/Architecture.md §9): it both writes the generic
    * Milestone row and mirrors the value onto Case.accidentDate so every
