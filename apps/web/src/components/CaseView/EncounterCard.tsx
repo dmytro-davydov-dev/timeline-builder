@@ -1,10 +1,14 @@
-import { Box, Chip, Link, Paper, Typography } from '@mui/material';
+import { Box, Chip, Paper, Typography } from '@mui/material';
 import { colorForMedicineType } from '../../config/medicineTypeColors';
 import type { MedicalEvent } from '../../types';
 
 interface EncounterCardProps {
   event: MedicalEvent;
   isAccidentDate: boolean;
+  /** Optional — when provided the card becomes clickable (e.g. the medicine
+   * type filter modal opens a full-detail modal on click). Cards without a
+   * handler render exactly as before. */
+  onClick?: (event: MedicalEvent) => void;
 }
 
 /**
@@ -12,9 +16,19 @@ interface EncounterCardProps {
  * Calendar day popover (§7.4) — PRD-Timeline-View.md requires the same card
  * shape in both places for visual consistency.
  */
-export function EncounterCard({ event, isAccidentDate }: EncounterCardProps) {
+export function EncounterCard({ event, isAccidentDate, onClick }: EncounterCardProps) {
   return (
-    <Paper variant="outlined" sx={{ p: 1.5 }}>
+    <Paper
+      variant="outlined"
+      onClick={onClick ? () => onClick(event) : undefined}
+      sx={{
+        p: 1.5,
+        ...(onClick && {
+          cursor: 'pointer',
+          '&:hover': { borderColor: 'primary.main' },
+        }),
+      }}
+    >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'flex-start' }}>
         <Box>
           <Typography variant="body2" sx={{ fontWeight: 600 }}>
@@ -40,11 +54,6 @@ export function EncounterCard({ event, isAccidentDate }: EncounterCardProps) {
         <Typography variant="body2" sx={{ mt: 1 }}>
           {event.summary}
         </Typography>
-      )}
-      {event.pdfLink && (
-        <Link href={event.pdfLink} target="_blank" rel="noopener" variant="caption" sx={{ mt: 1, display: 'inline-block' }}>
-          Source PDF
-        </Link>
       )}
     </Paper>
   );

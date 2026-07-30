@@ -45,6 +45,18 @@ export class Case {
   @Column({ nullable: true })
   accidentDate?: Date;
 
+  /**
+   * Marks the single case DefaultCaseSeeder creates on first boot
+   * (apps/api/src/excel-import/default-case-seeder.service.ts), so
+   * `CasesService.findDefault()` can identify it explicitly instead of
+   * assuming "oldest case" — a heuristic that breaks the moment any
+   * older/unrelated case (leftover manual `npm run seed` runs, stale local
+   * dev data, etc.) sits in the table. At most one row should have this set
+   * true at a time.
+   */
+  @Column({ default: false })
+  isDefault: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

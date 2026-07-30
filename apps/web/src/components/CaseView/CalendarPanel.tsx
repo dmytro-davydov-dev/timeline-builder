@@ -17,6 +17,9 @@ interface CalendarPanelProps {
   highlightedDays: Set<string>;
   accidentDate?: string | null;
   onSelectDay: (group: GroupedByDay, anchor: { x: number; y: number }) => void;
+  /** Opens a modal listing every encounter in that month — triggered by
+   * clicking the month's header in the "Month by month" grid below. */
+  onSelectMonth: (monthKey: string, label: string) => void;
 }
 
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -75,6 +78,9 @@ interface MonthCell {
 }
 
 interface MonthGrid {
+  /** `YYYY-MM`, used to identify the month to the encounters modal — not
+   * derivable from `label` once localized (e.g. "juillet 2026"). */
+  monthKey: string;
   label: string;
   cells: (MonthCell | null)[];
 }
@@ -120,7 +126,8 @@ function buildMonthGrids(dayMap: Map<string, GroupedByDay>, first: Date, last: D
       const key = dayKey(new Date(y, mo, day));
       cells.push({ day, key, info: dayMap.get(key), isAccident: key === accidentKey });
     }
-    months.push({ label: cur.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }), cells });
+    const monthKey = `${y}-${String(mo + 1).padStart(2, '0')}`;
+    months.push({ monthKey, label: cur.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }), cells });
     cur = new Date(y, mo + 1, 1);
   }
 
@@ -139,6 +146,7 @@ export function CalendarPanel({
   highlightedDays,
   accidentDate,
   onSelectDay,
+  onSelectMonth,
 }: CalendarPanelProps) {
   const dayMap = new Map(days.map((d) => [d.date.slice(0, 10), d]));
   const sortedKeys = Array.from(dayMap.keys()).sort();
@@ -319,7 +327,11 @@ export function CalendarPanel({
             key={month.label}
             sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 1.25 }}
           >
-            <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
+            <Typography
+              variant="subtitle2"
+              onClick={() => onSelectMonth(month.monthKey, month.label)}
+              sx={{ mb: 0.75, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+            >
               {month.label}
             </Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '3px', mb: 0.5 }}>

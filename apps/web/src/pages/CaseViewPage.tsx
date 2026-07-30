@@ -22,11 +22,15 @@ import {
 import { CaseHeader } from '../components/CaseView/CaseHeader';
 import { StatsBar } from '../components/CaseView/StatsBar';
 import { SharedToolbar } from '../components/CaseView/SharedToolbar';
+import { MedicineTypeModal } from '../components/CaseView/MedicineTypeModal';
+import { EncounterDetailModal } from '../components/CaseView/EncounterDetailModal';
 import { BodyMapPanel } from '../components/CaseView/BodyMapPanel';
 import { CalendarPanel } from '../components/CaseView/CalendarPanel';
 import { CalendarDayPopover } from '../components/CaseView/CalendarDayPopover';
+import { CalendarMonthModal } from '../components/CaseView/CalendarMonthModal';
 import { ChatPanel } from '../components/CaseView/ChatPanel';
-import type { GroupedByBodyPart, GroupedByDay } from '../types';
+import { distinctMedicineTypes } from '../config/medicineTypeColors';
+import type { GroupedByBodyPart, GroupedByDay, MedicalEvent } from '../types';
 
 /**
  * The flagship Case View — Body Map + Calendar split
@@ -54,7 +58,10 @@ export function CaseViewPage() {
   const [selectedBodyPart, setSelectedBodyPart] = useState<GroupedByBodyPart | null>(null);
   const [selectedDay, setSelectedDay] = useState<GroupedByDay | null>(null);
   const [dayPopoverAnchor, setDayPopoverAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<{ key: string; label: string } | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
+  const [medicineTypeFilter, setMedicineTypeFilter] = useState<string | null>(null);
+  const [selectedEncounter, setSelectedEncounter] = useState<MedicalEvent | null>(null);
 
   // Loading a different Excel resets both panels' selection/popup state
   // (PRD-Timeline-View.md §4, §8) — keyed on caseId so it fires on navigation
@@ -63,8 +70,11 @@ export function CaseViewPage() {
     setSelectedBodyPart(null);
     setSelectedDay(null);
     setDayPopoverAnchor(null);
+    setSelectedMonth(null);
     setHighlightedEventIds(new Set());
     setChatOpen(false);
+    setMedicineTypeFilter(null);
+    setSelectedEncounter(null);
   }, [caseId]);
 
   if (caseQuery.isLoading) {
@@ -119,9 +129,23 @@ export function CaseViewPage() {
   const selectedDayEvents = selectedDay
     ? selectedDay.eventIds.map((id) => eventsById.get(id)).filter((e): e is NonNullable<typeof e> => Boolean(e))
     : [];
+  // Month-click modal (calendar "Month by month" grid) — all encounters
+  // whose day falls in the clicked month, derived from the same grouped-by-day
+  // data already loaded for the grid rather than a separate fetch.
+  const selectedMonthEvents = selectedMonth
+    ? days
+        .filter((d) => d.date.slice(0, 7) === selectedMonth.key)
+        .flatMap((d) => d.eventIds)
+        .map((id) => eventsById.get(id))
+        .filter((e): e is NonNullable<typeof e> => Boolean(e))
+    : [];
 
   const gaps = treatmentGapsQuery.data ?? [];
   const longestQuietStretchDays = gaps.length ? Math.max(...gaps.map((g) => g.gapDays)) : 0;
+
+  const medicineTypes = distinctMedicineTypes(
+    (eventsQuery.data ?? []).map((event) => event.medicineType),
+  );
 
   return (
     <>
@@ -147,6 +171,8 @@ export function CaseViewPage() {
         calendarColorMode={calendarColorMode}
         onCalendarColorModeChange={setCalendarColorMode}
         onOpenChat={() => setChatOpen(true)}
+        medicineTypes={medicineTypes}
+        onSelectMedicineType={(type) => setMedicineTypeFilter(type)}
       />
 
       <Box
@@ -196,6 +222,7 @@ export function CaseViewPage() {
               setSelectedDay(group);
               setDayPopoverAnchor(anchor);
             }}
+            onSelectMonth={(key, label) => setSelectedMonth({ key, label })}
           />
         </Box>
       </Box>
@@ -210,6 +237,16 @@ export function CaseViewPage() {
             setSelectedDay(null);
             setDayPopoverAnchor(null);
           }}
+        />
+      )}
+
+      {selectedMonth && (
+        <CalendarMonthModal
+          label={selectedMonth.label}
+          events={selectedMonthEvents}
+          accidentDate={accidentDate}
+          onClose={() => setSelectedMonth(null)}
+          onSelectEncounter={setSelectedEncounter}
         />
       )}
 
@@ -233,6 +270,24 @@ export function CaseViewPage() {
           />
         </DialogContent>
       </Dialog>
+
+      {medicineTypeFilter && (
+        <MedicineTypeModal
+          caseId={caseQuery.data.id}
+          medicineType={medicineTypeFilter}
+          accidentDate={accidentDate}
+          onClose={() => setMedicineTypeFilter(null)}
+          onSelectEncounter={setSelectedEncounter}
+        />
+      )}
+
+      {selectedEncounter && (
+        <EncounterDetailModal
+          event={selectedEncounter}
+          accidentDate={accidentDate}
+          onClose={() => setSelectedEncounter(null)}
+        />
+      )}
       </Container>
     </>
   );

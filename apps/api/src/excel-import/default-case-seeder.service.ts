@@ -17,15 +17,19 @@ const DEFAULT_ASSET_RELATIVE_PATH = path.join(
  * Phase 1 is single-case-per-session (docs/PRD-Case-Management.md §2) with
  * no case list/switcher UI, so the app needs *some* case to exist the first
  * time anyone opens it — otherwise the root route has nothing to show and
- * falls back to the bare Upload screen. On boot, if the `cases` table is
- * empty, import the bundled demo Excel (`apps/api/assets/` — the same
+ * falls back to the bare Upload screen. On boot, if no case is marked
+ * `isDefault`, import the bundled demo Excel (`apps/api/assets/` — the same
  * "Caldwell - Medical Chronology" case referenced throughout
- * docs/AI-Chat-Spot-Check.md) so `GET /cases/default`
- * (cases.controller.ts) always has something to return.
+ * docs/AI-Chat-Spot-Check.md) and mark it default, so `GET /cases/default`
+ * (cases.controller.ts / CasesService.findDefault) always has a
+ * deterministic case to return.
  *
- * Guarded by a row count, so this runs once per fresh database and never
- * re-seeds or duplicates once at least one case exists — a user's own
- * uploaded case is never overwritten or raced.
+ * Guarded by the `isDefault` flag rather than a plain row count — a
+ * pre-existing, *unrelated* case (leftover manual `npm run seed` runs, an
+ * old test import, someone else's uploaded case) must not block seeding
+ * the real default, and once a default exists this must never re-seed or
+ * duplicate it. A user's own uploaded case is never touched either way,
+ * since it's never marked `isDefault`.
  *
  * The asset path is resolved relative to `process.cwd()` (same convention
  * as DATABASE_PATH in database.module.ts) rather than `__dirname`, so it
@@ -45,8 +49,10 @@ export class DefaultCaseSeeder implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
-    const existingCount = await this.cases.count();
-    if (existingCount > 0) return;
+    const existingDefaultCount = await this.cases.count({
+      where: { isDefault: true },
+    });
+    if (existingDefaultCount > 0) return;
 
     const assetPath = path.resolve(
       process.cwd(),
@@ -58,7 +64,7 @@ export class DefaultCaseSeeder implements OnApplicationBootstrap {
 
     if (!existsSync(assetPath)) {
       this.logger.warn(
-        `No cases exist and the default case asset was not found at ${assetPath} — skipping auto-seed. The app will show the Upload screen until a case is imported.`,
+        `No default case is set and the default case asset was not found at ${assetPath} — skipping auto-seed. The app will show the Upload screen until a case is imported.`,
       );
       return;
     }
@@ -70,6 +76,7 @@ export class DefaultCaseSeeder implements OnApplicationBootstrap {
         path.basename(assetPath),
         DEFAULT_CASE_NAME,
       );
+      await this.cases.update(summary.caseId, { isDefault: true });
       this.logger.log(
         `Seeded default case "${DEFAULT_CASE_NAME}" (${summary.caseId}) — ${summary.importSummary.rowsImported} rows imported.`,
       );

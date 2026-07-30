@@ -1,5 +1,17 @@
 import { useState } from 'react';
-import { Box, Button, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  MenuItem,
+  Select,
+  Stack,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from '@mui/material';
+import type { SelectChangeEvent } from '@mui/material';
+import { colorForMedicineType } from '../../config/medicineTypeColors';
 import type { Case } from '../../types';
 
 interface SharedToolbarProps {
@@ -10,6 +22,8 @@ interface SharedToolbarProps {
   calendarColorMode: 'intensity' | 'medicineType';
   onCalendarColorModeChange: (mode: 'intensity' | 'medicineType') => void;
   onOpenChat: () => void;
+  medicineTypes: string[];
+  onSelectMedicineType: (medicineType: string) => void;
 }
 
 const segGroupSx = {
@@ -59,10 +73,17 @@ export function SharedToolbar({
   calendarColorMode,
   onCalendarColorModeChange,
   onOpenChat,
+  medicineTypes,
+  onSelectMedicineType,
 }: SharedToolbarProps) {
   const [accidentDate, setAccidentDate] = useState(
     caseData.accidentDate?.slice(0, 10) ?? '',
   );
+
+  const handleMedicineTypeChange = (e: SelectChangeEvent) => {
+    const value = e.target.value;
+    if (value) onSelectMedicineType(value);
+  };
 
   return (
     <Stack
@@ -110,29 +131,56 @@ export function SharedToolbar({
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
           Date of accident
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-          <TextField
-            type="date"
-            size="small"
-            value={accidentDate}
-            onChange={(e) => setAccidentDate(e.target.value)}
-          />
-          <Button
-            size="small"
-            variant="outlined"
-            disabled={!accidentDate}
-            onClick={() => onSetAccidentDate(accidentDate)}
-          >
-            Set
-          </Button>
-        </Box>
+        <TextField
+          type="date"
+          size="small"
+          value={accidentDate}
+          onChange={(e) => {
+            const value = e.target.value;
+            setAccidentDate(value);
+            if (value) onSetAccidentDate(value);
+          }}
+        />
       </Box>
+
+      {medicineTypes.length > 0 && (
+        <Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
+            Filter by medicine type
+          </Typography>
+          <Select
+            size="small"
+            displayEmpty
+            value=""
+            onChange={handleMedicineTypeChange}
+            sx={{ minWidth: 220 }}
+            renderValue={() => 'Select a medicine type…'}
+          >
+            {medicineTypes.map((type) => (
+              <MenuItem key={type} value={type}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box
+                    sx={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      bgcolor: colorForMedicineType(type),
+                      flexShrink: 0,
+                    }}
+                  />
+                  {type}
+                </Box>
+              </MenuItem>
+            ))}
+          </Select>
+        </Box>
+      )}
 
         <Button
           size="small"
           variant="outlined"
           onClick={onOpenChat}
-          sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}
+          sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 1, p: '7px 12px' }}
         >
           Ask AI about this case
         </Button>

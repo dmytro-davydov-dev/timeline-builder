@@ -1,12 +1,13 @@
 import { Box, Stack, Typography } from '@mui/material';
 
-interface StatCardProps {
+export interface StatCardProps {
   value: string | number;
   label: string;
   alert?: boolean;
 }
 
-function StatCard({ value, label, alert }: StatCardProps) {
+/** Exported for reuse by other stat rows (e.g. the medicine type filter modal). */
+export function StatCard({ value, label, alert }: StatCardProps) {
   return (
     <Box
       sx={{

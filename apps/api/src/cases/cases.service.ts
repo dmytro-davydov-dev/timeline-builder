@@ -29,19 +29,32 @@ export class CasesService {
 
   /**
    * Phase 1 is single-case-per-session (docs/PRD-Case-Management.md §2) —
-   * no multi-case switcher UI yet, so "the default case" is simply the
-   * oldest one on record: the DefaultCaseSeeder-created demo case on a
-   * fresh install, or whichever case a user has since imported first. Used
-   * by the frontend's root route to skip the Upload screen on startup.
+   * no multi-case switcher UI yet, so "the default case" needs to resolve
+   * deterministically to the seeded demo case (DefaultCaseSeeder, marked
+   * `isDefault: true`) rather than to "whatever is oldest" — a heuristic
+   * that broke in practice as soon as stale/unrelated cases (leftover
+   * manual seed runs, old test imports) predated it in the table. Falls
+   * back to the oldest case only if nothing is explicitly marked, so this
+   * still resolves to *something* in an environment seeded before this flag
+   * existed. Used by the frontend's root route to skip the Upload screen on
+   * startup.
    */
   async findDefault(): Promise<Case> {
-    const [found] = await this.cases.find({
+    const [marked] = await this.cases.find({
+      where: { isDefault: true },
       order: { createdAt: 'ASC' },
       relations: { milestones: true },
       take: 1,
     });
-    if (!found) throw new NotFoundException('No case exists yet');
-    return found;
+    if (marked) return marked;
+
+    const [oldest] = await this.cases.find({
+      order: { createdAt: 'ASC' },
+      relations: { milestones: true },
+      take: 1,
+    });
+    if (!oldest) throw new NotFoundException('No case exists yet');
+    return oldest;
   }
 
   /**
