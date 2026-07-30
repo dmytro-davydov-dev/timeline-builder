@@ -32,8 +32,18 @@ export class Case {
   // No explicit `type: 'datetime'` — TypeORM infers the right DDL type per
   // driver from the Date design-type ("datetime" on sql.js, "timestamp
   // without time zone" on Postgres); see database.module.ts.
+  //
+  // Typed `Date` with only the `?` optional modifier — NOT `Date | null`.
+  // TypeScript's emitDecoratorMetadata can't serialize a union type into a
+  // single reflected constructor, so an explicit `| null` here makes it
+  // emit `Object` instead of `Date`, which TypeORM then can't map to a
+  // valid column type on Postgres (DataTypeNotSupportedError at boot).
+  // `?` alone doesn't have this problem and behaves identically at runtime
+  // (nullable column, reads back as `null` either way) — nothing in this
+  // codebase relies on the type-level distinction between `undefined` and
+  // `null` here.
   @Column({ nullable: true })
-  accidentDate?: Date | null;
+  accidentDate?: Date;
 
   @CreateDateColumn()
   createdAt: Date;
