@@ -30,6 +30,7 @@ import { CalendarDayPopover } from '../components/CaseView/CalendarDayPopover';
 import { CalendarMonthModal } from '../components/CaseView/CalendarMonthModal';
 import { ChatPanel } from '../components/CaseView/ChatPanel';
 import { distinctMedicineTypes } from '../config/medicineTypeColors';
+import { exportCaseToPdf, exportCaseToPptx } from '../utils/exportReport';
 import type { GroupedByBodyPart, GroupedByDay, MedicalEvent } from '../types';
 
 /**
@@ -147,9 +148,40 @@ export function CaseViewPage() {
     (eventsQuery.data ?? []).map((event) => event.medicineType),
   );
 
+  const exportReady = Boolean(
+    caseQuery.data && eventsQuery.data && statisticsQuery.data && groupedByBodyPartQuery.data,
+  );
+
+  const handleExportPdf = () => {
+    if (!caseQuery.data || !eventsQuery.data || !statisticsQuery.data) return;
+    exportCaseToPdf({
+      caseData: caseQuery.data,
+      events: eventsQuery.data,
+      statistics: statisticsQuery.data,
+      groupedByBodyPart: groups,
+      gaps,
+    });
+  };
+
+  const handleExportPpt = async () => {
+    if (!caseQuery.data || !eventsQuery.data || !statisticsQuery.data) return;
+    await exportCaseToPptx({
+      caseData: caseQuery.data,
+      events: eventsQuery.data,
+      statistics: statisticsQuery.data,
+      groupedByBodyPart: groups,
+      gaps,
+    });
+  };
+
   return (
     <>
-      <CaseHeader caseData={caseQuery.data} />
+      <CaseHeader
+        caseData={caseQuery.data}
+        onExportPdf={handleExportPdf}
+        onExportPpt={handleExportPpt}
+        exportReady={exportReady}
+      />
 
       <Container maxWidth="xl" sx={{ py: 2 }}>
         {statisticsQuery.data && (

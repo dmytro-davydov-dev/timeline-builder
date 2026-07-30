@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { Box, Button, Tooltip, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Typography } from '@mui/material';
+import { AboutModal } from '../AboutModal';
 import type { Case } from '../../types';
 
 const NAVY = '#0b0c2a';
@@ -14,14 +16,45 @@ const headerButtonSx = {
   '&.Mui-disabled': { color: 'rgba(255,255,255,0.4)', borderColor: 'rgba(255,255,255,0.15)' },
 };
 
+interface CaseHeaderProps {
+  caseData: Case;
+  onExportPdf: () => void;
+  onExportPpt: () => void | Promise<void>;
+  exportReady: boolean;
+}
+
 /**
  * Full-bleed dark header, styled after the reference prototype (UI
  * Concepts/v6_calendar_heatmap.html) — brand dot + case name + subtitle on
  * the left, case-level actions on the right. Export PDF/PPT live here
- * (rather than the toolbar) per the reference; both are MVP placeholders
- * (PRD-Timeline-View.md §4 — "coming soon", not silently broken).
+ * (rather than the toolbar) per the reference; each button disables itself
+ * only while its own export is running (or before case data has loaded),
+ * not permanently — real generation happens client-side in
+ * ../../utils/exportReport.ts.
  */
-export function CaseHeader({ caseData }: { caseData: Case }) {
+export function CaseHeader({ caseData, onExportPdf, onExportPpt, exportReady }: CaseHeaderProps) {
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pptLoading, setPptLoading] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+
+  const handleExportPdf = () => {
+    setPdfLoading(true);
+    try {
+      onExportPdf();
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const handleExportPpt = async () => {
+    setPptLoading(true);
+    try {
+      await onExportPpt();
+    } finally {
+      setPptLoading(false);
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -52,21 +85,37 @@ export function CaseHeader({ caseData }: { caseData: Case }) {
         <Button component={RouterLink} to="/upload" size="small" variant="outlined" sx={headerButtonSx}>
           Load different Excel
         </Button>
-        <Tooltip title="Coming soon">
-          <span>
-            <Button size="small" variant="outlined" disabled sx={headerButtonSx}>
-              Export PDF
-            </Button>
-          </span>
-        </Tooltip>
-        <Tooltip title="Coming soon">
-          <span>
-            <Button size="small" variant="outlined" disabled sx={headerButtonSx}>
-              Export PPT
-            </Button>
-          </span>
-        </Tooltip>
+        <Button
+          size="small"
+          variant="outlined"
+          disabled={!exportReady || pdfLoading}
+          onClick={handleExportPdf}
+          startIcon={pdfLoading ? <CircularProgress size={14} color="inherit" /> : undefined}
+          sx={headerButtonSx}
+        >
+          {pdfLoading ? 'Exporting…' : 'Export PDF'}
+        </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          disabled={!exportReady || pptLoading}
+          onClick={handleExportPpt}
+          startIcon={pptLoading ? <CircularProgress size={14} color="inherit" /> : undefined}
+          sx={headerButtonSx}
+        >
+          {pptLoading ? 'Exporting…' : 'Export PPT'}
+        </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={() => setAboutOpen(true)}
+          sx={headerButtonSx}
+        >
+          About
+        </Button>
       </Box>
+
+      {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
     </Box>
   );
 }

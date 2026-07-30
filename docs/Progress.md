@@ -4,7 +4,7 @@
 
 **Purpose:** living tracker of what's actually built versus what the PRDs/`Architecture.md` describe, so gaps don't have to be re-discovered by reading code every session. Update this file whenever a module's implementation status changes materially — don't let it drift into a changelog (git history already covers that).
 
-**Last audited:** 2026-07-29, against commit `1892384` (case management), with Timeline View popup/popover work (§4a), the Calendar activity-strip/month-grid rewrite (§4b), the Body Map silhouette + panel-order swap (§4c), and the header/stats-bar/toolbar restyle (§4d) layered on top, not yet committed.
+**Last audited:** 2026-07-30, against commit `c4dd8f1`, with real Export PDF / Export PPT (§4g) layered on top of the 2026-07-29 session (§4a–§4f), not yet committed.
 
 ## 1. Overall Status
 
@@ -71,7 +71,7 @@ No production code changed — this closes a test-coverage gap, not a behavioral
 - **Calendar is a single flat grid, not the activity-strip + month-grid combination** in §7.1–§7.2. No week/weekday structure, no per-month cards, no "jump to month," and — per the component's own code comment — this is explicitly called out as a placeholder ("simplified... full month-grid layout... is a fast follow").
 - **No legend** for either calendar color mode (§7.3 requires one).
 - **No accident-date visual marker** on the Calendar (ring/outline on the matching day) or Body Map (⚑ flag on popup cards — moot until popups exist). The date is stored and settable, but nothing currently renders it back.
-- **No Export PDF / Export PPT buttons at all** — §4 requires them present as clearly-labeled disabled/"coming soon" controls, not absent.
+- ~~No Export PDF / Export PPT buttons at all~~ Placeholder buttons done 2026-07-29 (§4a); real client-side export done 2026-07-30 (§4g).
 - **Body-part coordinate config covers ~19 terms**, not the ~30 in Appendix A. Missing from the curated set: Face, Eye, Ear, Nose, Mouth, Sinuses, Upper Arm, Forearm, Finger, Lungs, Heart, Armpit, Stomach, Intestines, Genitals, Toe. These currently fall into "Other findings," which is the correct *fallback* behavior but wasn't meant to be the primary path for that many common terms.
 - **No narrow-viewport stacking behavior verified** — the grid uses a responsive `xs`/`md` breakpoint, but the < 860px vertical-stack requirement and "no horizontal page scroll" acceptance criterion (§9) haven't been checked against the actual breakpoint value MUI uses.
 - **No empty/loading/error state copy** matching §5.4/§7.5 (e.g. "no body-part data found in this case" messaging) — components render an empty grid/figure rather than the specified instructional text in most cases.
@@ -154,6 +154,15 @@ User supplied a real `GEMINI_API_KEY` and asked to wire it in — this resolves 
 - **`docs/AI-Chat-Spot-Check.md` Actual/Pass columns now filled in** from this live run (post both fixes): Q2/Q3/Q4/Q5 pass cleanly against ground truth; Q1 ("first MRI") gets a caveat, not a clean pass — the seed case's own data has two rows narrating the same clinical episode with different literal dates, an ambiguity in the synthetic Excel source itself, not a grounding failure (the model's answer traces to a real tool result either way). Full detail in the log.
 - **Dev server left running** on `:3000` with the new key wired in, for anyone who wants to try the chat panel live in the browser next.
 
+## 4g. Export PDF / Export PPT — real implementation, no longer placeholders (2026-07-30)
+
+Closed the "no real PDF/PPT export" gap flagged in §4/§7 as an explicit MVP exclusion. Went with **client-side generation of a structured medical-chronology document**, not a screenshot of the Body Map/Calendar UI — an attorney-usable report (title/case summary, body-part breakdown table, chronological encounter table/slides) reads far better than an image dump of the split-view UI, and needs no backend changes since `CaseViewPage` already holds all the required data (`Case`, `MedicalEvent[]`, `CaseStatistics`, `GroupedByBodyPart[]`, `TreatmentGap[]`) via existing TanStack Query hooks.
+
+- **New `apps/web/src/utils/exportReport.ts`**: `exportCaseToPdf()` (jsPDF + jspdf-autotable) and `exportCaseToPptx()` (pptxgenjs). Both build the same three sections from the same `ExportReportData` shape: case summary stats (accident date, total encounters, treatment span, provider count, longest gap), a body-part breakdown table sorted by encounter count, and a full chronological encounter table (Date/Provider/Facility/Type/Care Type/Body Parts/Summary/Source-PDF-link). PDF paginates via autotable automatically with a repeating header and "Page N of M" footer; PPT chunks encounters 10-per-slide across as many "Treatment Timeline (i/n)" slides as needed. Colors reuse the app's own navy/indigo brand and `colorForMedicineType()` so the exported doc doesn't look like a generic table dump.
+- **`CaseHeader.tsx`**: Export PDF/PPT buttons are no longer permanently `disabled` with a "Coming soon" tooltip — each now calls into `exportReport.ts`, shows its own `CircularProgress` + "Exporting…" label while running, and only disables when case/events/statistics/grouped data haven't loaded yet (`exportReady` prop, computed in `CaseViewPage.tsx`).
+- **No backend changes** — `jspdf`, `jspdf-autotable`, `pptxgenjs` added to `apps/web/package.json` only.
+- **Verified against real data, not a synthetic fixture**: since the Chrome extension still isn't connected in this environment, ran both export functions directly against the live seeded "Caldwell" case (130 events, 30 body parts) via `npx tsx` hitting the real running API on `:3000` — confirmed `exportCaseToPdf` produces a valid multi-page PDF (43 pages against the full case; a small 8-event slice produced a clean 5-page PDF checked both at the text level, via `pdfjs-dist` extraction of every page, and visually via a rendered PNG of page 1) and `exportCaseToPptx` produces a valid `.pptx` (unzipped and inspected each slide's XML text content, plus a rendered title-slide thumbnail) with correct title/summary/body-part/chronological content and no runtime errors. `tsc -b --noEmit` and `vite build` both clean. Actual in-browser click-through of the header buttons is still unverified (same Chrome-extension gap noted throughout §4a–§4d) — low risk since the generation logic itself (the part that could actually fail) has been exercised directly against real data, and the button wiring is a thin, typed prop pass-through.
+
 ## 5. Known Working End-to-End Paths (verified by reading code, not by running it)
 
 1. Upload a valid Excel → Case + MedicalEvents persisted → redirect to Case View → stats/body-map/calendar all populate from real API calls.
@@ -172,7 +181,7 @@ User supplied a real `GEMINI_API_KEY` and asked to wire it in — this resolves 
 Don't re-flag these — they're documented MVP exclusions, not oversights:
 
 - No auth, no multi-case library/switcher (`PRD-Case-Management.md` §5).
-- No real PDF/PPT export (placeholder buttons are the only MVP requirement, and even those are currently absent — see §4).
+- ~~No real PDF/PPT export~~ Implemented 2026-07-30 (§4g) — client-side structured-document export, ahead of the original MVP/Phase-2 split.
 - No semantic/vector search — `semantic_search_events` is intentionally a keyword-match stub.
 - No OCR/PDF ingestion.
 - Only OpenAI wired for chat (Gemini is an open question, not a committed requirement).
