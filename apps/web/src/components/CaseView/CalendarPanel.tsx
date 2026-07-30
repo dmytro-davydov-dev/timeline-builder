@@ -1,6 +1,15 @@
-import { Box, Paper, Tooltip, Typography } from '@mui/material';
+import { useEffect, useRef, useState } from 'react';
+import { Box, Paper, Slider, Tooltip, Typography } from '@mui/material';
 import { colorForMedicineType, distinctMedicineTypes } from '../../config/medicineTypeColors';
 import type { GroupedByDay } from '../../types';
+
+/** The strip (and the "Month by month" grid below it) always fill 100% of
+ * this panel's column. The panel's column itself is pinned to a constant
+ * 75% of the Case View grid (see `CaseViewPage`'s `minmax(0, 3fr) minmax(0,
+ * 1fr)` split), so the on-screen size here is already constant across
+ * cases — a long treatment span just scrolls horizontally inside it
+ * instead of growing the column. */
+const STRIP_WIDTH = '100%';
 
 interface CalendarPanelProps {
   days: GroupedByDay[];
@@ -137,6 +146,31 @@ export function CalendarPanel({
 
   const legendTypes = colorMode === 'medicineType' ? distinctMedicineTypes(days.map((d) => d.dominantMedicineType)) : [];
 
+  const stripRef = useRef<HTMLDivElement>(null);
+  const [stripScrollMax, setStripScrollMax] = useState(0);
+  const [stripScrollLeft, setStripScrollLeft] = useState(0);
+
+  useEffect(() => {
+    const measure = () => {
+      const el = stripRef.current;
+      if (!el) return;
+      setStripScrollMax(Math.max(0, el.scrollWidth - el.clientWidth));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [days]);
+
+  const handleStripScroll = () => {
+    if (stripRef.current) setStripScrollLeft(stripRef.current.scrollLeft);
+  };
+
+  const handleSliderChange = (_: Event, value: number | number[]) => {
+    const next = Array.isArray(value) ? value[0] : value;
+    setStripScrollLeft(next);
+    if (stripRef.current) stripRef.current.scrollLeft = next;
+  };
+
   const handleCellClick = (info: GroupedByDay | undefined, e: React.MouseEvent) => {
     if (!info || info.count === 0) return;
     onSelectDay(info, { x: e.clientX, y: e.clientY });
@@ -178,13 +212,15 @@ export function CalendarPanel({
       </Typography>
 
       <Box
+        ref={stripRef}
+        onScroll={handleStripScroll}
         sx={{
           border: '1px solid',
           borderColor: 'divider',
           borderRadius: 1.5,
           p: 1.5,
+          width: STRIP_WIDTH,
           overflowX: 'auto',
-          mb: 1.5,
         }}
       >
         <Box sx={{ position: 'relative', pt: '16px', width: totalCols * PITCH }}>
@@ -228,7 +264,20 @@ export function CalendarPanel({
         </Box>
       </Box>
 
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+      {stripScrollMax > 0 && (
+        <Box sx={{ width: STRIP_WIDTH, px: 1.5, mt: 0.25 }}>
+          <Slider
+            size="small"
+            value={Math.min(stripScrollLeft, stripScrollMax)}
+            min={0}
+            max={stripScrollMax}
+            onChange={handleSliderChange}
+            aria-label="Scroll full case timeline"
+          />
+        </Box>
+      )}
+
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
         Color reflects the most common care type that day, shaded by volume.
       </Typography>
 

@@ -124,7 +124,7 @@ export function SharedToolbar({
         onClick={onOpenChat}
         sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}
       >
-        Ask about this case
+        Ask AI about this case
       </Button>
     </Stack>
   );

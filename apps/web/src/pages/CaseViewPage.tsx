@@ -154,7 +154,14 @@ export function CaseViewPage() {
           display: 'grid',
           gridTemplateColumns: '1fr',
           '@media (min-width: 860px)': {
-            gridTemplateColumns: '2fr 1fr',
+            // minmax(0, Nfr) — not plain `Nfr` — keeps the 75/25 split fixed
+            // regardless of case data. Grid items default to min-width:auto,
+            // so a case with a long treatment span (wide calendar strip)
+            // would otherwise force its column to grow past 75% and push
+            // the Body Map column off-screen. minmax(0, …) caps each
+            // column's minimum at 0, so overflow scrolls inside the column
+            // instead of resizing it.
+            gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 1fr)',
           },
           gap: 2,
         }}
@@ -162,7 +169,7 @@ export function CaseViewPage() {
         {/* DOM order keeps Body Map, Calendar stacked in that order for
             narrow-viewport display; `order` rearranges them to
             Calendar / Body Map on the desktop split only. */}
-        <Box sx={{ '@media (min-width: 860px)': { order: 2 } }}>
+        <Box sx={{ minWidth: 0, '@media (min-width: 860px)': { order: 2 } }}>
           <BodyMapPanel
             groups={groups}
             bodyView={bodyView}
@@ -177,7 +184,7 @@ export function CaseViewPage() {
             onClosePopup={() => setSelectedBodyPart(null)}
           />
         </Box>
-        <Box sx={{ '@media (min-width: 860px)': { order: 1 } }}>
+        <Box sx={{ minWidth: 0, '@media (min-width: 860px)': { order: 1 } }}>
           <CalendarPanel
             days={days}
             colorMode={calendarColorMode}
@@ -214,7 +221,7 @@ export function CaseViewPage() {
         slotProps={{ paper: { sx: { height: '70vh' } } }}
       >
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          Ask about this case
+          Ask AI about this case
           <IconButton size="small" onClick={() => setChatOpen(false)} aria-label="Close">
             ✕
           </IconButton>
